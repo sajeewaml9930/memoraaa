@@ -1,0 +1,284 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                         Int       @id @default(autoincrement())
+  username                   String    @unique @db.VarChar(80)
+  email                      String    @unique @db.VarChar(120)
+  passwordHash               String    @map("password_hash") @db.VarChar(128)
+  encryptionKey              String    @map("encryption_key") @db.VarChar(128)
+  fullName                   String?   @map("full_name") @db.VarChar(100)
+  bio                        String?   @db.VarChar(200)
+  avatar                     String?   @db.VarChar(200)
+  passcodeHash               String?   @map("passcode_hash") @db.VarChar(128)
+  passcodeTimeout            Int       @default(5) @map("passcode_timeout")
+  biometricEnabled           Boolean   @default(false) @map("biometric_enabled")
+  localOnly                  Boolean   @default(false) @map("local_only")
+  emailNotificationsEnabled  Boolean   @default(true) @map("email_notifications_enabled")
+  inAppNotificationsEnabled  Boolean   @default(true) @map("in_app_notifications_enabled")
+  dailyReminderTime          DateTime? @map("daily_reminder_time") @db.Time(0)
+  dailyReminderEnabled       Boolean   @default(true) @map("daily_reminder_enabled")
+  lastReminderSent           DateTime? @map("last_reminder_sent")
+  timezone                   String?   @map("timezone") @db.VarChar(50)
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  lastActive                 DateTime  @default(now()) @map("last_active")
+  
+  albums        Album[]
+  memories      Memory[]
+  tags          Tag[]
+  sharedAlbums    SharedAlbum[]
+  albumMutes      AlbumMute[]
+  backupJobs      BackupJob[]
+  storyViews      StoryView[]
+  searchHistory   SearchHistory[]
+  sharedMemoryLinks SharedMemoryLink[]
+  memoryMentions  MemoryMention[]
+  notifications   Notification[]
+  memoryReactions MemoryReaction[]
+}
+
+model SearchHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  query     String   @db.VarChar(500)
+  filters   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("search_history")
+}
+
+model PopularSearch {
+  id        Int      @id @default(autoincrement())
+  query     String   @unique @db.VarChar(500)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([count, updatedAt])
+  @@map("popular_searches")
+}
+
+model Album {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  description     String?   @db.VarChar(200)
+  coverPhoto      String?   @map("cover_photo") @db.VarChar(200)
+  isPrivate       Boolean   @default(true) @map("is_private")
+  isArchived      Boolean   @default(false) @map("is_archived")
+  isPinned        Boolean   @default(false) @map("is_pinned")
+  pinnedAt        DateTime? @map("pinned_at")
+  passcodeHash    String?   @map("passcode_hash") @db.VarChar(128)
+  passcodeTimeout Int       @default(5) @map("passcode_timeout")
+  userId          Int       @map("user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memories     AlbumMemory[]
+  sharedAlbums SharedAlbum[]
+  albumMutes   AlbumMute[]
+
+  @@map("albums")
+}
+
+model Memory {
+  id                 Int       @id @default(autoincrement())
+  memoryType         String    @map("memory_type") @db.VarChar(20)
+  encryptedContent   String?   @map("encrypted_content") @db.Text
+  encryptedFilePath  String?   @map("encrypted_file_path") @db.VarChar(500)
+  thumbnailPath      String?   @map("thumbnail_path") @db.VarChar(500)
+  duration           Int?      @map("duration")
+  title              String?   @db.VarChar(100)
+  description        String?   @db.VarChar(200)
+  location           String?   @db.VarChar(200)
+  latitude           Float?    @map("latitude")
+  longitude          Float?    @map("longitude")
+  mood               String?   @db.VarChar(20)
+  isFavorite         Boolean   @default(false) @map("is_favorite")
+  isPinned           Boolean   @default(false) @map("is_pinned")
+  pinnedAt           DateTime? @map("pinned_at")
+  isArchived         Boolean   @default(false) @map("is_archived")
+  isStory            Boolean   @default(false) @map("is_story")
+  expiresAt          DateTime? @map("expires_at")
+  viewCount          Int       @default(0) @map("view_count")
+  memoryDate         DateTime  @map("memory_date") @db.Date
+  userId             Int       @map("user_id")
+  forwardedFromId    Int?      @map("forwarded_from_id")
+  status             String    @default("processing") @db.VarChar(20)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forwardedFrom      Memory?    @relation("Forward", fields: [forwardedFromId], references: [id])
+  forwardedTo        Memory[]   @relation("Forward")
+  albums             AlbumMemory[]
+  tags               MemoryTag[]
+  storyViews         StoryView[]
+  sharedMemoryLinks  SharedMemoryLink[]
+  mentions           MemoryMention[]
+  notifications      Notification[]
+  reactions          MemoryReaction[]
+
+  @@map("memories")
+}
+
+model StoryView {
+  userId    Int      @map("user_id")
+  memoryId  Int      @map("memory_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory    Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, memoryId])
+  @@map("story_views")
+}
+
+model Tag {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(50)
+  isAuto    Boolean   @default(false) @map("is_auto")
+  userId    Int       @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memories  MemoryTag[]
+
+  @@map("tags")
+}
+
+model AlbumMemory {
+  albumId   Int @map("album_id")
+  memoryId  Int @map("memory_id")
+  
+  @@id([albumId, memoryId])
+  @@map("album_memories")
+  album  Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+}
+
+model MemoryTag {
+  memoryId  Int @map("memory_id")
+  tagId     Int @map("tag_id")
+  
+  @@id([memoryId, tagId])
+  @@map("memory_tags")
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+}
+
+model SharedAlbum {
+  id               Int       @id @default(autoincrement())
+  albumId          Int       @map("album_id")
+  userId           Int       @map("user_id")
+  permission       String    @default("view") @db.VarChar(20)
+  accepted         Boolean   @default(false)
+  invitedAt        DateTime  @default(now()) @map("invited_at")
+  muted            Boolean   @default(false)
+  token            String?   @unique @map("token") @db.VarChar(255)
+  inviteExpiresAt  DateTime? @map("invite_expires_at")
+  
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("shared_albums")
+}
+
+model MemoryMention {
+  id        Int      @id @default(autoincrement())
+  memoryId  Int      @map("memory_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, userId])
+  @@map("memory_mentions")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  type      String   @default("mention") @db.VarChar(30)
+  message   String   @db.VarChar(255)
+  memoryId  Int?     @map("memory_id")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory Memory? @relation(fields: [memoryId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
+
+model MemoryReaction {
+  id        Int      @id @default(autoincrement())
+  memoryId  Int      @map("memory_id")
+  userId    Int      @map("user_id")
+  emoji     String   @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, userId, emoji])
+  @@map("memory_reactions")
+}
+
+model SharedMemoryLink {
+  id           Int       @id @default(autoincrement())
+  token        String    @unique @db.VarChar(255)
+  memoryId     Int       @map("memory_id")
+  userId       Int       @map("user_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  expiresAt    DateTime? @map("expires_at")
+  passwordHash String?   @map("password_hash") @db.VarChar(255)
+  viewCount    Int       @default(0) @map("view_count")
+  isActive     Boolean   @default(true) @map("is_active")
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, userId])
+  @@map("shared_memory_links")
+}
+
+model AlbumMute {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  albumId   Int      @map("album_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, albumId])
+  @@map("album_mutes")
+}
+
+model BackupJob {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  startedAt     DateTime  @default(now()) @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  status        String    @default("pending") @db.VarChar(20)
+  filePath      String?   @map("file_path") @db.VarChar(500)
+  cloudProvider String?   @map("cloud_provider") @db.VarChar(20)
+  errorMessage  String?   @map("error_message") @db.Text
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("backup_jobs")
+}
