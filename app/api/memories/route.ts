@@ -17,18 +17,9 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = Number(session.user.id);
-    const withLocationOnly = request.nextUrl.searchParams.get("withLocation") === "true";
-
     const memories = await prisma.memory.findMany({
       where: {
         userId,
-        ...(withLocationOnly ? {
-          OR: [
-            { location: { not: null } },
-            { latitude: { not: null } },
-            { longitude: { not: null } },
-          ],
-        } : {}),
       },
       orderBy: [{ memoryDate: "desc" }, { createdAt: "desc" }],
       select: {
@@ -36,9 +27,6 @@ export async function GET(request: NextRequest) {
         memoryType: true,
         title: true,
         description: true,
-        location: true,
-        latitude: true,
-        longitude: true,
         memoryDate: true,
         createdAt: true,
       },
@@ -49,7 +37,7 @@ export async function GET(request: NextRequest) {
       data: memories,
     });
   } catch (error) {
-    console.error("Error fetching memories for map:", error);
+    console.error("Error fetching memories:", error);
     return NextResponse.json({ error: "Failed to fetch memories" }, { status: 500 });
   }
 }
@@ -73,9 +61,6 @@ export async function POST(request: NextRequest) {
       encryptedFilePath,
       title,
       description,
-      location,
-      latitude,
-      longitude,
       mood,
       albumId,
       memoryDate,
@@ -129,9 +114,6 @@ export async function POST(request: NextRequest) {
         encryptedFilePath,
         title,
         description,
-        location: typeof location === "string" ? location.slice(0, 200) : null,
-        latitude: Number.isFinite(Number(latitude)) ? Number(latitude) : null,
-        longitude: Number.isFinite(Number(longitude)) ? Number(longitude) : null,
         mood: normalizedMood,
         memoryDate: memoryDate ? new Date(memoryDate) : new Date(),
         userId,

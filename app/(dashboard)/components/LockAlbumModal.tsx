@@ -51,6 +51,11 @@ export default function LockAlbumModal({
       return;
     }
 
+    if (passcode.trim().length < 4) {
+      window.alert("Passcode must be at least 4 characters.");
+      return;
+    }
+
     if (passcode !== confirmPasscode) {
       window.alert("Passcodes do not match.");
       return;
@@ -147,6 +152,7 @@ export default function LockAlbumModal({
               type="password"
               value={passcode}
               onChange={(event) => setPasscode(event.target.value)}
+              minLength={4}
               placeholder="Enter passcode"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -160,6 +166,7 @@ export default function LockAlbumModal({
               type="password"
               value={confirmPasscode}
               onChange={(event) => setConfirmPasscode(event.target.value)}
+              minLength={4}
               placeholder="Confirm passcode"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

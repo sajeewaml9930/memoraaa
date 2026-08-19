@@ -78,16 +78,10 @@ export async function POST(request: NextRequest) {
     const endTimeValue = formData.get("endTime");
     const isStoryValue = formData.get("isStory");
     const moodValue = formData.get("mood");
-    const locationValue = formData.get("location");
-    const latitudeValue = formData.get("latitude");
-    const longitudeValue = formData.get("longitude");
     const caption = typeof captionValue === "string" ? captionValue.trim().slice(0, 200) : "";
     const keepOriginalQuality = keepOriginalQualityValue === "true" || keepOriginalQualityValue === "1";
     const isStory = isStoryValue === "true" || isStoryValue === "1";
     const normalizedMood = typeof moodValue === "string" ? moodValue.trim().toLowerCase() : null;
-    const normalizedLocation = typeof locationValue === "string" ? locationValue.trim().slice(0, 200) : null;
-    const latitude = latitudeValue !== null && latitudeValue !== undefined ? Number(latitudeValue) : null;
-    const longitude = longitudeValue !== null && longitudeValue !== undefined ? Number(longitudeValue) : null;
     const isVideoUpload = file instanceof File && file.type.toLowerCase().startsWith("video/");
     const startTime = Number(startTimeValue ?? 0);
     const endTime = Number(endTimeValue ?? 0);
@@ -238,9 +232,6 @@ export async function POST(request: NextRequest) {
         duration: isVideoUpload || isAudioUpload ? duration : undefined,
         title: file.name,
         description: caption || undefined,
-        location: normalizedLocation,
-        latitude: Number.isFinite(latitude) ? latitude : null,
-        longitude: Number.isFinite(longitude) ? longitude : null,
         mood: ["happy","sad","excited","angry","anxious","grateful","neutral","tired","loved","hopeful","calm","nostalgic","reflective"].includes(normalizedMood ?? "") ? normalizedMood : null,
         memoryDate: new Date(),
         userId,

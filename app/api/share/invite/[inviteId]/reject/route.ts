@@ -29,7 +29,26 @@ export async function POST(
       return NextResponse.json({ error: "Invite not found" }, { status: 404 });
     }
 
-    if (invite.userId !== currentUserId) {
+    const canCancelAsAlbumManager = await prisma.album.findFirst({
+      where: {
+        id: invite.albumId,
+        OR: [
+          { userId: currentUserId },
+          {
+            sharedAlbums: {
+              some: {
+                userId: currentUserId,
+                accepted: true,
+                permission: "admin",
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (invite.userId !== currentUserId && !canCancelAsAlbumManager) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

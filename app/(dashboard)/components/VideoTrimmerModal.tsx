@@ -7,7 +7,7 @@ interface VideoTrimmerModalProps {
   isUploading?: boolean;
   uploadProgress?: number;
   onCancel: () => void;
-  onConfirm: (payload: { startTime: number; endTime: number }) => Promise<void> | void;
+  onConfirm: (payload: { caption: string; startTime: number; endTime: number }) => Promise<void> | void;
 }
 
 export default function VideoTrimmerModal({
@@ -23,6 +23,7 @@ export default function VideoTrimmerModal({
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [caption, setCaption] = useState("");
 
   useEffect(() => {
     if (!file) {
@@ -107,7 +108,7 @@ export default function VideoTrimmerModal({
       return;
     }
 
-    await onConfirm({ startTime, endTime });
+    await onConfirm({ caption: caption.trim(), startTime, endTime });
   };
 
   return (
@@ -183,6 +184,21 @@ export default function VideoTrimmerModal({
           <span className="text-sm text-gray-500">
             {duration > 0 ? `${Math.max(0, endTime - startTime).toFixed(1)} sec clip` : "Loading..."}
           </span>
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="video-caption" className="mb-2 block text-sm font-medium text-gray-700">
+            Caption
+          </label>
+          <textarea
+            id="video-caption"
+            value={caption}
+            maxLength={200}
+            onChange={(event) => setCaption(event.target.value.slice(0, 200))}
+            placeholder="Add a caption..."
+            className="min-h-[88px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <div className="mt-1 text-right text-xs text-gray-500">{200 - caption.length} characters left</div>
         </div>
 
         {isUploading && (

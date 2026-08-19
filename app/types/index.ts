@@ -39,9 +39,6 @@ export interface Memory {
   duration?: number;
   title?: string;
   description?: string;
-  location?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
   mood?: MoodType;
   isFavorite: boolean;
   isPinned: boolean;

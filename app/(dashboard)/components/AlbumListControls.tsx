@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 
 export type AlbumSortValue = "date-desc" | "date-asc" | "name-asc" | "name-desc";
@@ -36,14 +37,50 @@ export default function AlbumListControls({
   onPrivacyFilterChange,
   onContentTypeChange,
 }: AlbumListControlsProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (controlsRef.current && !controlsRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   return (
-    <div className="border-b border-gray-200 bg-white p-3 space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+    <div ref={controlsRef} className="relative z-20 border-b border-gray-200 bg-white p-3">
+      <button
+        type="button"
+        onClick={() => setIsOpen((value) => !value)}
+        aria-expanded={isOpen}
+        aria-controls="album-list-filters"
+        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+      >
         <SlidersHorizontal size={16} className="text-gray-500" />
         <span>Sort & filter</span>
-      </div>
+      </button>
 
-      <div className="grid grid-cols-2 gap-2">
+      {isOpen && (
+        <div
+          id="album-list-filters"
+          className="absolute left-3 right-3 top-full mt-2 space-y-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
+        >
+          <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
           Sort
           <select
@@ -70,9 +107,9 @@ export default function AlbumListControls({
             <option value="shared">Shared/public</option>
           </select>
         </label>
-      </div>
+          </div>
 
-      <div>
+          <div>
         <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">
           Album ownership
         </div>
@@ -92,9 +129,9 @@ export default function AlbumListControls({
             </button>
           ))}
         </div>
-      </div>
+          </div>
 
-      <div>
+          <div>
         <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">
           Content type
         </div>
@@ -114,7 +151,9 @@ export default function AlbumListControls({
             </button>
           ))}
         </div>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

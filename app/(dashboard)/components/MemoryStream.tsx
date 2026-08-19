@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { MoreHorizontal, Pencil, Paperclip, Send, Mic, Trash2, Heart, Pin, PinOff, Archive, ArchiveRestore, Share2, MapPin } from "lucide-react";
+import { MoreHorizontal, Pencil, Paperclip, Send, Mic, Trash2, Heart, Pin, PinOff, Archive, ArchiveRestore, Share2 } from "lucide-react";
 import EditMemoryModal from "./EditMemoryModal";
 import ForwardMemoryModal from "./ForwardMemoryModal";
 import ImageGalleryModal from "./ImageGalleryModal";
@@ -10,21 +10,17 @@ import PhotoCaptionModal from "./PhotoCaptionModal";
 import VideoTrimmerModal from "./VideoTrimmerModal";
 import AudioRecorderModal from "./AudioRecorderModal";
 import ShareMemoryModal from "./ShareMemoryModal";
-import dynamic from "next/dynamic";
 import { useSocket } from "@/app/hooks/useSocket";
 import { renderMentionSegments, serializeMention } from "@/app/lib/mentions";
-import { MOOD_META, MOOD_OPTIONS, normalizeMood } from "@/app/lib/moods";
+import { MOOD_META, normalizeMood } from "@/app/lib/moods";
 import type { Memory, MemoryReactionRecord } from "@/app/types";
-
-const LocationPickerModal = dynamic(() => import("./LocationPickerModal"), {
-  ssr: false,
-});
 
 export default function MemoryStream() {
   const { id: albumId } = useParams();
   const parsedAlbumId = albumId ? Number(albumId) : null;
   const socket = useSocket(parsedAlbumId);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -50,10 +46,6 @@ export default function MemoryStream() {
   const [typingUsers, setTypingUsers] = useState<Array<{ userId: number; userName: string }>>([]);
   const [mentionSuggestions, setMentionSuggestions] = useState<Array<{ id: number; username: string; fullName?: string | null; email?: string }>>([]);
   const [mentionQuery, setMentionQuery] = useState("");
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<{ location: string; latitude: number; longitude: number } | null>(null);
-  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
-  const reactionOptions = ["👍", "🎉", "❤️", "😂", "😮"];
   const typingActiveRef = useRef(false);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingRepeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -392,8 +384,7 @@ export default function MemoryStream() {
     setMessageText(nextValue);
     setMentionQuery("");
     setTimeout(() => {
-      const composerInput = document.querySelector<HTMLInputElement>("input[placeholder='Aa']");
-      composerInput?.focus();
+      composerInputRef.current?.focus();
     }, 0);
   }, [messageText]);
 
@@ -423,10 +414,6 @@ export default function MemoryStream() {
           content: messageText,
           albumId: targetAlbumId,
           memoryDate: new Date().toISOString(),
-          mood: selectedMood ?? null,
-          location: selectedLocation?.location ?? null,
-          latitude: selectedLocation?.latitude ?? null,
-          longitude: selectedLocation?.longitude ?? null,
         }),
       });
 
@@ -437,8 +424,6 @@ export default function MemoryStream() {
 
       // Success: clear input and refresh list
       setMessageText("");
-      setSelectedMood(null);
-      setSelectedLocation(null);
       await fetchMemories();
     } catch (error) {
       console.error("Error sending message:", error);
@@ -483,14 +468,6 @@ export default function MemoryStream() {
       uploadFormData.append("albumId", String(parsedAlbumId));
       uploadFormData.append("caption", payload.caption);
       uploadFormData.append("keepOriginalQuality", String(payload.keepOriginalQuality));
-      if (selectedMood) {
-        uploadFormData.append("mood", selectedMood);
-      }
-      if (selectedLocation) {
-        uploadFormData.append("location", selectedLocation.location);
-        uploadFormData.append("latitude", String(selectedLocation.latitude));
-        uploadFormData.append("longitude", String(selectedLocation.longitude));
-      }
 
       const xhr = new XMLHttpRequest();
 
@@ -506,8 +483,6 @@ export default function MemoryStream() {
       xhr.onload = async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           setPendingPhoto(null);
-          setSelectedMood(null);
-          setSelectedLocation(null);
           await fetchMemories();
         } else {
           try {
@@ -538,7 +513,7 @@ export default function MemoryStream() {
     }
   };
 
-  const handleVideoUpload = async (payload: { startTime: number; endTime: number }) => {
+  const handleVideoUpload = async (payload: { caption: string; startTime: number; endTime: number }) => {
     if (!pendingVideo || !parsedAlbumId) {
       return;
     }
@@ -550,18 +525,10 @@ export default function MemoryStream() {
       const uploadFormData = new FormData();
       uploadFormData.append("file", pendingVideo);
       uploadFormData.append("albumId", String(parsedAlbumId));
-      uploadFormData.append("caption", "");
+      uploadFormData.append("caption", payload.caption);
       uploadFormData.append("keepOriginalQuality", "false");
       uploadFormData.append("startTime", String(payload.startTime));
       uploadFormData.append("endTime", String(payload.endTime));
-      if (selectedMood) {
-        uploadFormData.append("mood", selectedMood);
-      }
-      if (selectedLocation) {
-        uploadFormData.append("location", selectedLocation.location);
-        uploadFormData.append("latitude", String(selectedLocation.latitude));
-        uploadFormData.append("longitude", String(selectedLocation.longitude));
-      }
 
       const xhr = new XMLHttpRequest();
 
@@ -577,8 +544,6 @@ export default function MemoryStream() {
       xhr.onload = async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           setPendingVideo(null);
-          setSelectedMood(null);
-          setSelectedLocation(null);
           await fetchMemories();
         } else {
           try {
@@ -623,14 +588,6 @@ export default function MemoryStream() {
       uploadFormData.append("albumId", String(parsedAlbumId));
       uploadFormData.append("caption", "");
       uploadFormData.append("keepOriginalQuality", "false");
-      if (selectedMood) {
-        uploadFormData.append("mood", selectedMood);
-      }
-      if (selectedLocation) {
-        uploadFormData.append("location", selectedLocation.location);
-        uploadFormData.append("latitude", String(selectedLocation.latitude));
-        uploadFormData.append("longitude", String(selectedLocation.longitude));
-      }
 
       const xhr = new XMLHttpRequest();
 
@@ -645,7 +602,6 @@ export default function MemoryStream() {
 
       xhr.onload = async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          setSelectedMood(null);
           await fetchMemories();
         } else {
           try {
@@ -983,8 +939,8 @@ export default function MemoryStream() {
               .join(", ")} and ${typingUsers.length - 2} more are typing...`;
 
   return (
-    <div className="flex flex-1 flex-col bg-white">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col bg-white">
+      <div className="scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -1014,11 +970,11 @@ export default function MemoryStream() {
         </div>
 
         {isLoading ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex min-h-full items-center justify-center">
             <p className="text-gray-500">Loading memories...</p>
           </div>
         ) : visibleMemories.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex min-h-full items-center justify-center">
             <p className="text-gray-500">
               {showFavoritesOnly ? "No favorite memories yet." : "No memories yet. Create one!"}
             </p>
@@ -1052,13 +1008,6 @@ export default function MemoryStream() {
                         : "";
 
                     const mentionSegments = memory.memoryType === "text" ? renderMentionSegments(memory.encryptedContent || "") : [];
-                    const reactionCounts = (memory.reactions ?? []).reduce<Record<string, number>>((counts, reaction) => {
-                      counts[reaction.emoji] = (counts[reaction.emoji] ?? 0) + 1;
-                      return counts;
-                    }, {});
-                    const currentUserReaction = currentUser?.id
-                      ? (memory.reactions ?? []).find((reaction) => reaction.userId === currentUser.id)?.emoji ?? null
-                      : null;
                     const moodInfo = normalizeMood(memory.mood);
 
                     return (
@@ -1230,11 +1179,6 @@ export default function MemoryStream() {
                               <span>{MOOD_META[moodInfo].label}</span>
                             </>
                           ) : null}
-                          {memory.location && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium text-blue-50">
-                              📍 {memory.location.slice(0, 24)}{memory.location.length > 24 ? "…" : ""}
-                            </span>
-                          )}
                           <span>{new Date(memory.memoryDate || memory.createdAt).toLocaleDateString()}</span>
                         </span>
                         <span className="text-[10px] text-blue-100">
@@ -1246,30 +1190,6 @@ export default function MemoryStream() {
                       </div>
                     </div>
                   )}
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {reactionOptions.map((emoji) => {
-                      const count = reactionCounts[emoji] ?? 0;
-                      const isSelected = currentUserReaction === emoji;
-
-                      return (
-                        <button
-                          key={`${memory.id}-${emoji}`}
-                          type="button"
-                          onClick={() => void handleToggleReaction(memory.id, emoji)}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition ${
-                            isSelected
-                              ? "border-blue-200 bg-blue-50 text-blue-700"
-                              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                          }`}
-                          title={`React with ${emoji}`}
-                        >
-                          <span>{emoji}</span>
-                          <span>{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
 
                   <div className="absolute -right-2 -top-2 flex items-center gap-1.5">
                     <button
@@ -1408,34 +1328,6 @@ export default function MemoryStream() {
         )}
 
         <form onSubmit={handleSendMessage} className="flex gap-2">
-          <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-1">
-            <span className="text-xs font-medium text-gray-600">Mood</span>
-            <div className="flex flex-wrap items-center gap-1">
-              {MOOD_OPTIONS.map((mood) => {
-                const meta = MOOD_META[mood];
-                const isSelected = selectedMood === mood;
-
-                return (
-                  <button
-                    key={mood}
-                    type="button"
-                    onClick={() => setSelectedMood(isSelected ? null : mood)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition ${
-                      isSelected
-                        ? "border-blue-200 bg-blue-100 text-blue-800"
-                        : "border-transparent bg-transparent text-gray-600 hover:border-gray-200 hover:bg-white"
-                    }`}
-                    title={meta.label}
-                    aria-label={`Set mood: ${meta.label}`}
-                  >
-                    <span>{meta.emoji}</span>
-                    <span className="hidden sm:inline">{meta.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <input
             ref={fileInputRef}
             type="file"
@@ -1456,16 +1348,6 @@ export default function MemoryStream() {
 
           <button
             type="button"
-            className={`rounded-full p-2 transition ${selectedLocation ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            title={selectedLocation ? `Location: ${selectedLocation.location}` : "Add location"}
-            onClick={() => setIsLocationPickerOpen(true)}
-            disabled={isUploading}
-          >
-            <MapPin size={20} />
-          </button>
-
-          <button
-            type="button"
             className="rounded-full bg-gray-100 p-2 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
             title="Voice message"
             onClick={() => setIsVoiceRecorderOpen(true)}
@@ -1475,30 +1357,16 @@ export default function MemoryStream() {
           </button>
 
           <div className="relative flex-1">
-            {selectedLocation && (
-              <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
-                <MapPin size={12} />
-                <span className="truncate">{selectedLocation.location}</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedLocation(null)}
-                  className="ml-1 text-blue-500 hover:text-blue-700"
-                  aria-label="Remove selected location"
-                >
-                  ×
-                </button>
-              </div>
-            )}
             <input
+              ref={composerInputRef}
               type="text"
-              placeholder="Aa"
               value={messageText}
+              className="w-full rounded-full bg-gray-100 px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               onChange={(event) => handleComposerInputChange(event.target.value)}
               onBlur={() => {
                 stopTyping();
                 setTimeout(() => setMentionQuery(""), 150);
               }}
-              className="w-full rounded-full bg-gray-100 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {mentionQuery && (
               <div className="absolute bottom-full left-0 z-10 mb-2 max-h-40 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
@@ -1640,14 +1508,6 @@ export default function MemoryStream() {
         />
       )}
 
-      <LocationPickerModal
-        isOpen={isLocationPickerOpen}
-        onClose={() => setIsLocationPickerOpen(false)}
-        onSelect={(location) => {
-          setSelectedLocation(location);
-          setIsLocationPickerOpen(false);
-        }}
-      />
 
       <ShareMemoryModal
         memoryId={shareMemoryId}

@@ -12,13 +12,11 @@ const MEMORY_TYPES = [
 interface SearchFiltersProps {
   selectedTypes: string[];
   selectedMood: string;
-  selectedLocation: string;
   selectedTagIds: number[];
   moodOptions: string[];
   tagOptions: Array<{ id: number; name: string }>;
   onTypesChange: (nextTypes: string[]) => void;
   onMoodChange: (value: string) => void;
-  onLocationChange: (value: string) => void;
   onTagIdsChange: (nextTagIds: number[]) => void;
   onClear: () => void;
 }
@@ -26,13 +24,11 @@ interface SearchFiltersProps {
 export default function SearchFilters({
   selectedTypes,
   selectedMood,
-  selectedLocation,
   selectedTagIds,
   moodOptions,
   tagOptions,
   onTypesChange,
   onMoodChange,
-  onLocationChange,
   onTagIdsChange,
   onClear,
 }: SearchFiltersProps) {
@@ -102,17 +98,6 @@ export default function SearchFilters({
               </option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Location</label>
-          <input
-            type="text"
-            value={selectedLocation}
-            onChange={(event) => onLocationChange(event.target.value)}
-            placeholder="Search by location"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
         </div>
 
         <div>

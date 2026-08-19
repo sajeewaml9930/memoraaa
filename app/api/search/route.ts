@@ -64,7 +64,6 @@ export async function GET(request: NextRequest) {
     const toParam = request.nextUrl.searchParams.get("to");
     const typesParam = parseCsvValues(request.nextUrl.searchParams.get("types"));
     const moodParam = (request.nextUrl.searchParams.get("mood") ?? "").trim();
-    const locationParam = (request.nextUrl.searchParams.get("location") ?? "").trim();
     const tagIdsParam = parseTagIds(request.nextUrl.searchParams.get("tagIds"));
     const page = parsePositiveInt(request.nextUrl.searchParams.get("page"), 1, 1000);
     const limit = parsePositiveInt(request.nextUrl.searchParams.get("limit"), 25, MAX_RESULTS);
@@ -125,7 +124,6 @@ export async function GET(request: NextRequest) {
       isStory: false,
       ...(normalizedTypes.length > 0 ? { memoryType: { in: normalizedTypes } } : {}),
       ...(moodParam ? { mood: { equals: moodParam } } : {}),
-      ...(locationParam ? { location: { contains: locationParam } } : {}),
       ...(tagIdsParam.length > 0 ? { tags: { some: { tagId: { in: tagIdsParam } } } } : {}),
       albums: {
         some: {
@@ -180,7 +178,6 @@ export async function GET(request: NextRequest) {
         const searchableText = buildSearchableText(
           memory.title,
           memory.description,
-          memory.location,
           memory.mood,
           decryptedContent
         );
@@ -196,7 +193,6 @@ export async function GET(request: NextRequest) {
               decryptedContent,
               memory.title ?? "",
               memory.description ?? "",
-              memory.location ?? "",
               memory.mood ?? "",
             ].filter(Boolean);
             matchesAdvancedQuery = evaluateAdvancedQuery(q, allText);
@@ -219,7 +215,6 @@ export async function GET(request: NextRequest) {
           memoryType: memory.memoryType,
           title: memory.title,
           description: memory.description,
-          location: memory.location,
           mood: memory.mood,
           content: decryptedContent,
           snippet,

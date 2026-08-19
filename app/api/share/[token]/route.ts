@@ -19,7 +19,6 @@ function sanitizeSharePayload(memory: any, shareLink: any, token: string) {
     memoryType: memory.memoryType,
     title: memory.title ?? null,
     description: memory.description ?? null,
-    location: memory.location ?? null,
     mood: memory.mood ?? null,
     memoryDate: memory.memoryDate,
     createdAt: memory.createdAt,

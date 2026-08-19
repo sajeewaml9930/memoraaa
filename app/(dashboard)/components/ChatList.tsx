@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Search, Plus, MoreVertical, Pin, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
@@ -17,7 +17,6 @@ import type { Album } from "@/app/types";
 
 export default function ChatList() {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [sortValue, setSortValue] = useState<AlbumSortValue>("date-desc");
   const [ownerFilter, setOwnerFilter] = useState<AlbumOwnerFilter>("all");
   const [privacyFilter, setPrivacyFilter] = useState<AlbumPrivacyFilter>("all");
@@ -57,16 +56,6 @@ export default function ChatList() {
   useEffect(() => {
     fetchAlbums();
   }, [fetchAlbums]);
-
-  const filteredAlbums = useMemo(() => {
-    if (!searchTerm) {
-      return albums;
-    }
-
-    return albums.filter((album) =>
-      album.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [albums, searchTerm]);
 
   const handleCreateAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,24 +288,13 @@ export default function ChatList() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-3 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search albums..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-full bg-gray-100 py-2 pl-10 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <Link
-            href="/search"
-            className="absolute right-2 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200"
-            title="Open global search"
-          >
-            <Search size={14} />
-          </Link>
-        </div>
+        <Link
+          href="/search"
+          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          <Search size={16} />
+          Search memories
+        </Link>
       </div>
 
       {/* New Album Form */}
@@ -367,15 +345,15 @@ export default function ChatList() {
           <div className="flex items-center justify-center p-8">
             <p className="text-gray-500">Loading albums...</p>
           </div>
-        ) : filteredAlbums.length === 0 ? (
+        ) : albums.length === 0 ? (
           <div className="flex items-center justify-center p-8">
             <p className="text-center text-gray-500">
-              {searchTerm ? "No albums found" : "No albums yet. Create one!"}
+              No albums yet. Create one!
             </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {filteredAlbums.map((album) => (
+            {albums.map((album) => (
               <div
                 key={album.id}
                 className="relative"

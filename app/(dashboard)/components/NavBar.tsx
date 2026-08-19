@@ -10,7 +10,6 @@ import {
   Archive,
   Settings,
   LogOut,
-  Map,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 
@@ -44,7 +43,6 @@ export default function NavBar() {
   const navItems = [
     { href: "/chats", icon: MessageCircle, label: "Chats", title: "Messages" },
     { href: "/albums", icon: Layers, label: "Albums", title: "All Albums" },
-    { href: "/map", icon: Map, label: "Map", title: "Locations" },
     { href: "/status", icon: Clock, label: "Status", title: "Stories" },
     { href: "/archived", icon: Archive, label: "Archive", title: "Archived" },
     { href: "/settings", icon: Settings, label: "Settings", title: "Settings" },

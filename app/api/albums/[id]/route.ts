@@ -192,24 +192,27 @@ export async function PATCH(
 
     // Parse form data
     const contentType = request.headers.get("content-type") || "";
-    let name: string | null = null;
-    let description: string | null = null;
+    let name: string | null | undefined;
+    let description: string | null | undefined;
     let isPrivate: boolean | undefined;
     let isArchived: boolean | undefined;
+    let isPinned: boolean | undefined;
     let coverPhotoPath: string | undefined;
 
     if (contentType.includes("application/json")) {
       const body = await request.json();
-      name = body.name;
-      description = body.description;
+      name = Object.prototype.hasOwnProperty.call(body, "name") ? body.name : undefined;
+      description = Object.prototype.hasOwnProperty.call(body, "description") ? body.description : undefined;
       isPrivate = body.isPrivate;
       isArchived = body.isArchived;
+      isPinned = body.isPinned;
     } else if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
-      name = formData.get("name") as string | null;
-      description = formData.get("description") as string | null;
-      isPrivate = formData.get("isPrivate") === "true";
-      isArchived = formData.get("isArchived") === "true";
+      name = formData.has("name") ? (formData.get("name") as string | null) : undefined;
+      description = formData.has("description") ? (formData.get("description") as string | null) : undefined;
+      isPrivate = formData.has("isPrivate") ? formData.get("isPrivate") === "true" : undefined;
+      isArchived = formData.has("isArchived") ? formData.get("isArchived") === "true" : undefined;
+      isPinned = formData.has("isPinned") ? formData.get("isPinned") === "true" : undefined;
       const coverPhotoFile = formData.get("coverPhoto") as File | null;
 
       if (coverPhotoFile) {
@@ -278,7 +281,7 @@ export async function PATCH(
     // Validate inputs
     const updateData: Record<string, string | boolean | null> = {};
 
-    if (name !== null) {
+    if (name !== undefined) {
       const validation = validateAlbumName(name || "");
       if (!validation.valid) {
         return NextResponse.json(
@@ -289,7 +292,7 @@ export async function PATCH(
       updateData.name = (name || "").trim();
     }
 
-    if (description !== null) {
+    if (description !== undefined) {
       const validation = validateDescription(description || "");
       if (!validation.valid) {
         return NextResponse.json(
@@ -306,6 +309,10 @@ export async function PATCH(
 
     if (isArchived !== undefined) {
       updateData.isArchived = isArchived;
+    }
+
+    if (isPinned !== undefined) {
+      updateData.isPinned = isPinned;
     }
 
     if (coverPhotoPath) {

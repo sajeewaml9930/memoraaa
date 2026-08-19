@@ -11,7 +11,6 @@ interface SearchResult {
   memoryType: string;
   title?: string | null;
   description?: string | null;
-  location?: string | null;
   mood?: string | null;
   content: string;
   snippet: string;
@@ -66,7 +65,6 @@ export default function SearchPage() {
   const toParam = searchParams.get("to") ?? "";
   const typesParam = searchParams.get("types") ?? "";
   const moodParam = searchParams.get("mood") ?? "";
-  const locationParam = searchParams.get("location") ?? "";
   const tagIdsParam = searchParams.get("tagIds") ?? "";
 
   const currentAlbumId = albumIdParam ? Number(albumIdParam) : "";
@@ -158,10 +156,6 @@ export default function SearchPage() {
           params.set("mood", moodParam);
         }
 
-        if (locationParam) {
-          params.set("location", locationParam);
-        }
-
         if (tagIdsParam) {
           params.set("tagIds", tagIdsParam);
         }
@@ -193,7 +187,7 @@ export default function SearchPage() {
     fetchResults();
 
     return () => controller.abort();
-  }, [albumIdParam, fromParam, page, limit, mode, moodParam, query, tagIdsParam, toParam, typesParam, locationParam]);
+  }, [albumIdParam, fromParam, page, limit, mode, moodParam, query, tagIdsParam, toParam, typesParam]);
 
   const pageCount = useMemo(() => Math.max(1, Math.ceil(total / limit)), [limit, total]);
 
@@ -205,7 +199,6 @@ export default function SearchPage() {
     to: toParam,
     types: typesParam,
     mood: moodParam,
-    location: locationParam,
     tagIds: tagIdsParam,
   });
 
@@ -298,11 +291,6 @@ export default function SearchPage() {
       nextParams.set("mood", moodParam);
     }
 
-    if (locationParam) {
-      params.set("location", locationParam);
-      nextParams.set("location", locationParam);
-    }
-
     if (tagIdsParam) {
       params.set("tagIds", tagIdsParam);
       nextParams.set("tagIds", tagIdsParam);
@@ -321,7 +309,6 @@ export default function SearchPage() {
         to: toParam || undefined,
         types: typesParam || undefined,
         mood: moodParam || undefined,
-        location: locationParam || undefined,
         tagIds: tagIdsParam || undefined,
       });
       const historyResponse = await fetch("/api/search/history");
@@ -334,7 +321,7 @@ export default function SearchPage() {
   };
 
   const handleFilterChange = (
-    next: Partial<{ q: string; albumId: string; from: string; to: string; types: string; mood: string; location: string; tagIds: string }>
+    next: Partial<{ q: string; albumId: string; from: string; to: string; types: string; mood: string; tagIds: string }>
   ) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -345,7 +332,6 @@ export default function SearchPage() {
       to: toParam,
       types: typesParam,
       mood: moodParam,
-      location: locationParam,
       tagIds: tagIdsParam,
       ...next,
     };
@@ -392,12 +378,6 @@ export default function SearchPage() {
       params.delete("mood");
     }
 
-    if (merged.location) {
-      params.set("location", merged.location);
-    } else {
-      params.delete("location");
-    }
-
     if (merged.tagIds) {
       params.set("tagIds", merged.tagIds);
     } else {
@@ -416,7 +396,6 @@ export default function SearchPage() {
       to: "",
       types: "",
       mood: "",
-      location: "",
       tagIds: "",
     });
   };
@@ -440,7 +419,6 @@ export default function SearchPage() {
     const to = filters.to ?? toParam;
     const types = filters.types ?? typesParam;
     const mood = filters.mood ?? moodParam;
-    const location = filters.location ?? locationParam;
     const tagIds = filters.tagIds ?? tagIdsParam;
 
     if (albumId) {
@@ -461,10 +439,6 @@ export default function SearchPage() {
 
     if (mood) {
       nextParams.set("mood", String(mood));
-    }
-
-    if (location) {
-      nextParams.set("location", String(location));
     }
 
     if (tagIds) {
@@ -581,7 +555,6 @@ export default function SearchPage() {
         to: toParam || undefined,
         types: typesParam || undefined,
         mood: moodParam || undefined,
-        location: locationParam || undefined,
         tagIds: tagIdsParam || undefined,
       });
 
@@ -769,13 +742,11 @@ export default function SearchPage() {
           <SearchFilters
             selectedTypes={selectedTypes}
             selectedMood={moodParam}
-            selectedLocation={locationParam}
             selectedTagIds={selectedTagIds}
             moodOptions={moodOptions}
             tagOptions={tagOptions}
             onTypesChange={(nextValues: string[]) => handleFilterChange({ types: nextValues.join(",") })}
             onMoodChange={(value: string) => handleFilterChange({ mood: value })}
-            onLocationChange={(value: string) => handleFilterChange({ location: value })}
             onTagIdsChange={(nextValues: number[]) => handleFilterChange({ tagIds: nextValues.join(",") })}
             onClear={handleClearFilters}
           />
@@ -786,7 +757,7 @@ export default function SearchPage() {
             <p className="text-sm text-gray-500">
               {isLoading ? "Searching..." : `${total} result${total === 1 ? "" : "s"} for “${formattedQuery}”`}
             </p>
-            {(query || typesParam || moodParam || locationParam || tagIdsParam || albumIdParam || fromParam || toParam) && (
+            {(query || typesParam || moodParam || tagIdsParam || albumIdParam || fromParam || toParam) && (
               <button
                 type="button"
                 onClick={handleClearFilters}
