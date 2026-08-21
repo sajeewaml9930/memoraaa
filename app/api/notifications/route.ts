@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Number(searchParams.get("limit")) || 20, 100);
     const offset = Math.max(Number(searchParams.get("offset")) || 0, 0);
 
+    const unreadOnly = searchParams.get("unread") === "true";
     const notifications = await prisma.notification.findMany({
-      where: { userId },
+      where: { userId, ...(unreadOnly ? { read: false } : {}) },
       include: {
         memory: {
           select: { id: true, title: true, memoryDate: true },

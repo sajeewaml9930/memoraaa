@@ -33,18 +33,22 @@
 
   io.on("connection", (socket) => {
     socket.on("join_album", (albumId) => {
-      if (!albumId) {
+      const normalizedAlbumId = Number(albumId);
+      if (!Number.isFinite(normalizedAlbumId) || normalizedAlbumId <= 0) {
+        console.warn("Rejected invalid album room join:", albumId);
         return;
       }
-      socket.join(`album:${albumId}`);
+
+      socket.join(`album:${normalizedAlbumId}`);
+      console.info(`Socket ${socket.id} joined album:${normalizedAlbumId}`);
     });
 
     socket.on("leave_album", (albumId) => {
-      if (!albumId) {
+      const normalizedAlbumId = Number(albumId);
+      if (!Number.isFinite(normalizedAlbumId) || normalizedAlbumId <= 0) {
         return;
       }
 
-      const normalizedAlbumId = Number(albumId);
       const typingUsers = typingUsersByAlbum.get(normalizedAlbumId);
       if (typingUsers) {
         typingUsers.delete(Number(socket.handshake.query?.userId ?? 0));
@@ -54,6 +58,17 @@
       }
 
       socket.leave(`album:${normalizedAlbumId}`);
+      console.info(`Socket ${socket.id} left album:${normalizedAlbumId}`);
+    });
+
+    socket.on("join_notifications", (userId) => {
+      const normalizedUserId = Number(userId);
+      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0) socket.join(`notifications:${normalizedUserId}`);
+    });
+
+    socket.on("leave_notifications", (userId) => {
+      const normalizedUserId = Number(userId);
+      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0) socket.leave(`notifications:${normalizedUserId}`);
     });
 
     socket.on("typing", (payload) => {
@@ -108,17 +123,7 @@
     });
   });
 
-  const { expireStories } = await import("./workers/expire-stories.js");
   const { processReminderJobs } = await import("./workers/reminder-worker.js");
-
-  try {
-    const result = await expireStories();
-    if (result.deletedCount > 0) {
-      console.log(`Expired ${result.deletedCount} story stories.`);
-    }
-  } catch (error) {
-    console.warn("Startup story expiry check skipped:", error.message || error);
-  }
 
   // Process reminders on startup (in case the server just restarted near a reminder time)
   try {
@@ -129,17 +134,6 @@
   } catch (error) {
     console.warn("Startup reminder job skipped:", error.message || error);
   }
-
-  cron.schedule("0 * * * *", async () => {
-    try {
-      const result = await expireStories();
-      if (result.deletedCount > 0) {
-        console.log(`Expired ${result.deletedCount} story stories.`);
-      }
-    } catch (error) {
-      console.error("Story expiry job failed:", error);
-    }
-  });
 
   // Run reminder job every minute to catch reminders at the exact time
   cron.schedule("* * * * *", async () => {

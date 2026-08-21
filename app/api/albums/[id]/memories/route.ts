@@ -7,24 +7,33 @@ import { ensureAlbumPermission } from "@/app/lib/permissions";
 import { ensureAlbumCover } from "@/app/lib/cover-generator";
 import { parseMentionUsers } from "@/app/lib/mentions";
 import { normalizeMood } from "@/app/lib/moods";
+import { emitToAlbum, emitToUser } from "@/app/lib/socket";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authConfig);
 
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
     const albumId = Number(id);
     const userId = Number(session.user.id);
+    const requestedTypes = (request.nextUrl.searchParams.get("type") || "")
+      .split(",")
+      .map((type) => type.trim())
+      .filter(Boolean);
+    const requestedLimit = Number(
+      request.nextUrl.searchParams.get("limit") || 0,
+    );
+    const limit =
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 50)
+        : undefined;
 
     if (!Number.isFinite(albumId)) {
       console.error("Invalid album id in route params:", { id });
@@ -34,75 +43,106 @@ export async function GET(
     const album = await prisma.album.findFirst({
       where: {
         id: albumId,
-        OR: [{ userId }, { sharedAlbums: { some: { userId, accepted: true } } }],
+        OR: [
+          { userId },
+          { sharedAlbums: { some: { userId, accepted: true } } },
+        ],
       },
     });
 
     if (!album) {
-      return NextResponse.json(
-        { error: "Album not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Album not found" }, { status: 404 });
     }
 
-    const permissionCheck = await ensureAlbumPermission(userId, albumId, "view");
+    const permissionCheck = await ensureAlbumPermission(
+      userId,
+      albumId,
+      "view",
+    );
     if (!permissionCheck.allowed) {
-      return NextResponse.json({ error: permissionCheck.error }, { status: permissionCheck.status });
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status },
+      );
     }
 
     if (album.isArchived) {
-      return NextResponse.json(
-        { error: "Album is deleted" },
-        { status: 404 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { encryptionKey: true },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Album is deleted" }, { status: 404 });
     }
 
     const albumMemories = await prisma.albumMemory.findMany({
-      where: { albumId },
+      where: {
+        albumId,
+        memory: {
+          isArchived: false,
+          ...(requestedTypes.length > 0
+            ? { memoryType: { in: requestedTypes } }
+            : {}),
+        },
+      },
       include: {
         memory: {
           include: {
             reactions: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                fullName: true,
+                avatar: true,
+                encryptionKey: true,
+              },
+            },
           },
         },
       },
       orderBy: { memory: { createdAt: "desc" } },
+      ...(limit ? { take: limit } : {}),
     });
 
     const memories = albumMemories
       .map((am) => am.memory)
       .filter((memory) => !memory.isArchived)
       .map((memory) => {
-
-      if (!memory.encryptedContent) {
-        return { ...memory, encryptedContent: "" };
-      }
-
-      try {
-        return {
-          ...memory,
-          encryptedContent: decrypt(memory.encryptedContent, user.encryptionKey),
+        const { user: memoryOwner, ...clientMemory } = memory;
+        const sender = {
+          id: memoryOwner.id,
+          username: memoryOwner.username,
+          fullName: memoryOwner.fullName,
+          avatar: memoryOwner.avatar
+            ? `/api/user/avatar/${memoryOwner.id}`
+            : null,
         };
-      } catch (error) {
-        console.error("Error decrypting memory content:", error);
-        return {
-          ...memory,
-          encryptedContent: "",
-        };
-      }
-    });
+
+        if (!clientMemory.encryptedContent) {
+          return { ...clientMemory, encryptedContent: "", sender };
+        }
+
+        try {
+          return {
+            ...clientMemory,
+            encryptedContent: decrypt(
+              clientMemory.encryptedContent,
+              memoryOwner.encryptionKey,
+            ),
+            sender,
+          };
+        } catch (error) {
+          console.error("Error decrypting album memory content:");
+          console.error({
+            albumId,
+            memoryId: clientMemory.id,
+            memoryType: clientMemory.memoryType,
+            ownerId: clientMemory.userId,
+            error,
+          });
+          return {
+            ...clientMemory,
+            encryptedContent: "",
+            sender,
+          };
+        }
+      });
 
     return NextResponse.json({
       success: true,
@@ -112,14 +152,14 @@ export async function GET(
     console.error("Error fetching memories:", error);
     return NextResponse.json(
       { error: "Failed to fetch memories" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -140,7 +180,10 @@ export async function POST(
     const album = await prisma.album.findFirst({
       where: {
         id: albumId,
-        OR: [{ userId }, { sharedAlbums: { some: { userId, accepted: true } } }],
+        OR: [
+          { userId },
+          { sharedAlbums: { some: { userId, accepted: true } } },
+        ],
       },
     });
 
@@ -151,10 +194,22 @@ export async function POST(
 
     const permissionCheck = await ensureAlbumPermission(userId, albumId, "add");
     if (!permissionCheck.allowed) {
-      return NextResponse.json({ error: permissionCheck.error }, { status: permissionCheck.status });
+      return NextResponse.json(
+        { error: permissionCheck.error },
+        { status: permissionCheck.status },
+      );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as {
+      memoryType?: string;
+      content?: string;
+      encryptedContent?: string;
+      encryptedFilePath?: string;
+      title?: string;
+      description?: string;
+      mood?: string;
+      memoryDate?: string;
+    };
     const {
       memoryType,
       content,
@@ -164,14 +219,18 @@ export async function POST(
       description,
       mood,
       memoryDate,
-    } = body as Record<string, any>;
+    } = body;
 
     const normalizedMood = normalizeMood(mood);
 
-    const normalizedContent = typeof content === "string" ? content : encryptedContent;
+    const normalizedContent =
+      typeof content === "string" ? content : encryptedContent;
 
     if (!memoryType || !albumId || !normalizedContent) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -204,22 +263,47 @@ export async function POST(
       },
     });
 
-    const validMentionedIds = [...new Set(
-      parseMentionUsers(normalizedContent)
-        .map((entry) => Number(entry.id))
-        .filter((id) => Number.isFinite(id) && id > 0 && id !== userId)
-    )];
+    const responseMemory = {
+      ...memory,
+      albumId,
+      encryptedContent: normalizedContent,
+    };
+
+    try {
+      emitToAlbum("new_memory", albumId, {
+        albumId,
+        memory: responseMemory,
+      });
+    } catch (error) {
+      console.error("Error emitting new album memory:", {
+        albumId,
+        memoryId: memory.id,
+        error,
+      });
+    }
+
+    const validMentionedIds = [
+      ...new Set(
+        parseMentionUsers(normalizedContent)
+          .map((entry) => Number(entry.id))
+          .filter((id) => Number.isFinite(id) && id > 0 && id !== userId),
+      ),
+    ];
 
     if (validMentionedIds.length > 0) {
       const collaboratorIds = new Set<number>([
         album.userId,
-        ...((await prisma.sharedAlbum.findMany({
-          where: { albumId, accepted: true },
-          select: { userId: true },
-        })).map((entry) => entry.userId)),
+        ...(
+          await prisma.sharedAlbum.findMany({
+            where: { albumId, accepted: true },
+            select: { userId: true },
+          })
+        ).map((entry) => entry.userId),
       ]);
 
-      const finalMentionIds = validMentionedIds.filter((id) => collaboratorIds.has(id));
+      const finalMentionIds = validMentionedIds.filter((id) =>
+        collaboratorIds.has(id),
+      );
       if (finalMentionIds.length > 0) {
         await prisma.memoryMention.createMany({
           data: finalMentionIds.map((mentionedUserId) => ({
@@ -231,7 +315,12 @@ export async function POST(
 
         const mentionUsers = await prisma.user.findMany({
           where: { id: { in: finalMentionIds } },
-          select: { id: true, fullName: true, username: true, inAppNotificationsEnabled: true },
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            inAppNotificationsEnabled: true,
+          },
         });
 
         const notificationEntries = mentionUsers
@@ -248,6 +337,9 @@ export async function POST(
           await prisma.notification.createMany({
             data: notificationEntries,
           });
+          notificationEntries.forEach(({ userId }) =>
+            emitToUser("notification", userId, { userId }),
+          );
         }
       }
     }
@@ -256,9 +348,15 @@ export async function POST(
       await ensureAlbumCover(Number(albumId));
     }
 
-    return NextResponse.json({ success: true, data: memory }, { status: 201 });
+    return NextResponse.json(
+      { success: true, data: responseMemory },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Error creating memory in album route:", error);
-    return NextResponse.json({ error: "Failed to create memory" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create memory" },
+      { status: 500 },
+    );
   }
 }

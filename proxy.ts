@@ -9,9 +9,13 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/chats") {
+    return NextResponse.redirect(new URL("/albums", request.url), 308);
+  }
+
   // Redirect authenticated users away from auth pages
   if ((pathname === "/login" || pathname === "/register") && token) {
-    return NextResponse.redirect(new URL("/chats", request.url));
+    return NextResponse.redirect(new URL("/albums", request.url));
   }
 
   // Redirect unauthenticated users to login
@@ -23,5 +27,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/register", "/chats", "/albums", "/status", "/archived", "/settings", "/album/:path*"],
+  matcher: ["/", "/login", "/register", "/chats", "/albums", "/archived", "/settings", "/album/:path*"],
 };

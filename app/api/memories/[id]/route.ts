@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/app/lib/auth";
 import prisma from "@/app/lib/prisma";
-import { decrypt, encrypt } from "@/app/lib/encryption";
+import { encrypt } from "@/app/lib/encryption";
 import { emitToAlbum } from "@/app/lib/socket";
 
 async function getMemoryWithPermission(memoryId: number, userId: number) {
@@ -18,23 +18,16 @@ async function getMemoryWithPermission(memoryId: number, userId: number) {
   }
 
   const isOwner = memory.userId === userId;
-  const albumIds = memory.albums.map((albumMemory) => albumMemory.albumId);
-  const sharedAlbumAccess = await prisma.sharedAlbum.findFirst({
-    where: {
-      albumId: { in: albumIds },
-      userId,
-      accepted: true,
-      permission: { in: ["edit", "admin"] },
-    },
-  });
-
   return {
     memory,
-    allowed: isOwner || Boolean(sharedAlbumAccess),
+    allowed: isOwner,
   };
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await getServerSession(authConfig);
 
@@ -79,7 +72,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         });
       }
 
-      return NextResponse.json({ success: true, data: updatedMemory }, { status: 200 });
+      return NextResponse.json(
+        { success: true, data: updatedMemory },
+        { status: 200 },
+      );
     }
 
     if (typeof isPinned === "boolean") {
@@ -103,11 +99,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         });
       }
 
-      return NextResponse.json({ success: true, data: updatedMemory }, { status: 200 });
+      return NextResponse.json(
+        { success: true, data: updatedMemory },
+        { status: 200 },
+      );
     }
 
     if (typeof content !== "string" || !content.trim()) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Content is required" },
+        { status: 400 },
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -128,14 +130,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       },
     });
 
-    return NextResponse.json({ success: true, data: updatedMemory }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: updatedMemory },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error updating memory:", error);
-    return NextResponse.json({ error: "Failed to update memory" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update memory" },
+      { status: 500 },
+    );
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await getServerSession(authConfig);
 
@@ -169,9 +180,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       },
     });
 
-    return NextResponse.json({ success: true, message: "Memory deleted" }, { status: 200 });
+    return NextResponse.json(
+      { success: true, message: "Memory deleted" },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error deleting memory:", error);
-    return NextResponse.json({ error: "Failed to delete memory" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete memory" },
+      { status: 500 },
+    );
   }
 }

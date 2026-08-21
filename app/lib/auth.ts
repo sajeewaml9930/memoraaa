@@ -26,11 +26,19 @@ export const authConfig: NextAuthOptions = {
 
         const passwordMatch = await comparePassword(
           credentials.password as string,
-          user.passwordHash
+          user.passwordHash,
         );
 
         if (!passwordMatch) {
           return null;
+        }
+
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED");
+        }
+
+        if (!user.isActive) {
+          throw new Error("ACCOUNT_DEACTIVATED");
         }
 
         return {
@@ -54,8 +62,10 @@ export const authConfig: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = String(token.id ?? session.user.id ?? "");
-        session.user.name = (token.name as string | undefined) ?? session.user.name;
-        session.user.image = (token.picture as string | undefined) ?? session.user.image;
+        session.user.name =
+          (token.name as string | undefined) ?? session.user.name;
+        session.user.image =
+          (token.picture as string | undefined) ?? session.user.image;
       }
       return session;
     },

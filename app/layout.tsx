@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/app/components/providers/AuthProvider";
+import { ThemeProvider } from "@/app/components/theme-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,21 +16,30 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Memoraa - Your Personal Memory Journal",
-  description: "A private digital scrapbook for your memories with end-to-end encryption",
+  description:
+    "A private digital scrapbook for your memories with end-to-end encryption",
 };
 
-export default function RootLayout({ 
-  children, 
-}: { 
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode;
 }) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

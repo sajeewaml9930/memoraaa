@@ -1,28 +1,218 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+.wallpaper-pattern-dots {
+  background-color: #f8fafc;
+  background-image: radial-gradient(#94a3b8 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.wallpaper-pattern-stripes {
+  background-color: #dbeafe;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.12) 0 10px,
+    transparent 10px 20px
+  );
+}
+
+.wallpaper-pattern-waves {
+  background-color: #ccfbf1;
+  background-image: repeating-radial-gradient(
+    ellipse at 0 0,
+    rgba(13, 148, 136, 0.15) 0 2px,
+    transparent 3px 18px
+  );
+}
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #f3f4f6;
+  --accent-foreground: #1f2937;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #93c5fd;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --primary: #60a5fa;
+  --primary-foreground: #0f172a;
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #f87171;
+  --border: #334155;
+  --input: #334155;
+  --ring: #60a5fa;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Keep legacy neutral utility classes theme-aware while screens migrate to tokens. */
+.dark .bg-white {
+  background-color: var(--background) !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-slate-50 {
+  background-color: var(--muted) !important;
+}
+
+.dark .bg-gray-100,
+.dark .bg-slate-100 {
+  background-color: var(--secondary) !important;
+}
+
+.dark .bg-gray-200,
+.dark .bg-gray-300,
+.dark .bg-gray-400 {
+  background-color: var(--border) !important;
+}
+
+.dark .bg-gray-800,
+.dark .bg-gray-900,
+.dark .bg-slate-900,
+.dark .bg-slate-950 {
+  background-color: var(--background) !important;
+}
+
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: var(--foreground) !important;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: var(--secondary-foreground) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-gray-300,
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-slate-300 {
+  color: var(--muted-foreground) !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: var(--border) !important;
+}
+
+.dark .divide-gray-100 > :not(:last-child) {
+  border-color: var(--border) !important;
+}
+
+.dark .placeholder-gray-400::placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.dark .ring-slate-200 {
+  --tw-ring-color: var(--ring) !important;
+}
+
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: var(--accent) !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-100 {
+  background-color: #172554 !important;
+}
+
+.dark .bg-blue-200,
+.dark .bg-blue-300,
+.dark .bg-blue-400 {
+  background-color: #1e3a8a !important;
+}
+
+.dark .bg-blue-500,
+.dark .bg-blue-600,
+.dark .bg-blue-700 {
+  background-color: #2563eb !important;
+}
+
+.dark .text-blue-300,
+.dark .text-blue-600,
+.dark .text-blue-700,
+.dark .text-blue-800 {
+  color: #bfdbfe !important;
+}
+
+.dark .border-blue-100,
+.dark .border-blue-200,
+.dark .border-blue-400,
+.dark .border-blue-500,
+.dark .border-blue-600 {
+  border-color: #2563eb !important;
+}
+
+.dark .ring-blue-100,
+.dark .ring-blue-200,
+.dark .ring-blue-500 {
+  --tw-ring-color: var(--ring) !important;
 }
 
 @layer utilities {

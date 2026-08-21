@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArchiveRestore, FolderArchive } from "lucide-react";
 import type { Album } from "@/app/types";
+import LeftPanelLayout from "../components/LeftPanelLayout";
 
 export default function ArchivedPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -51,11 +52,12 @@ export default function ArchivedPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col bg-gray-50">
+    <LeftPanelLayout>
+      <div className="flex min-h-full flex-col bg-gray-50">
       <div className="border-b border-gray-200 bg-white px-6 py-4">
         <div className="flex items-center gap-3">
           <Link
-            href="/chats"
+            href="/albums"
             className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100"
             title="Back to chats"
           >
@@ -114,6 +116,7 @@ export default function ArchivedPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </LeftPanelLayout>
   );
 }

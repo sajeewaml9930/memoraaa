@@ -18,9 +18,28 @@ declare module "next-auth" {
 }
 
 // Memory types
-export type MemoryType = "text" | "photo" | "video" | "voice" | "audio" | "mixed";
+export type MemoryType =
+  | "text"
+  | "photo"
+  | "video"
+  | "voice"
+  | "audio"
+  | "mixed";
 export type MemoryStatus = "processing" | "ready" | "failed";
-export type MoodType = "happy" | "sad" | "neutral" | "excited" | "angry" | "anxious" | "grateful" | "tired" | "loved" | "hopeful" | "calm" | "nostalgic" | "reflective";
+export type MoodType =
+  | "happy"
+  | "sad"
+  | "neutral"
+  | "excited"
+  | "angry"
+  | "anxious"
+  | "grateful"
+  | "tired"
+  | "loved"
+  | "hopeful"
+  | "calm"
+  | "nostalgic"
+  | "reflective";
 
 export interface MemoryReactionRecord {
   id: number;
@@ -28,6 +47,13 @@ export interface MemoryReactionRecord {
   userId: number;
   emoji: string;
   createdAt: Date | string;
+}
+
+export interface MemorySender {
+  id: number;
+  username: string;
+  fullName?: string | null;
+  avatar?: string | null;
 }
 
 export interface Memory {
@@ -46,8 +72,6 @@ export interface Memory {
   // albumId is sometimes returned by APIs (e.g., forward/create) to indicate the album owning the memory
   albumId?: number | null;
   isArchived: boolean;
-  isStory: boolean;
-  expiresAt?: Date | string | null;
   viewCount: number;
   memoryDate: Date;
   userId: number;
@@ -56,23 +80,7 @@ export interface Memory {
   createdAt: Date;
   updatedAt: Date;
   reactions?: MemoryReactionRecord[];
-}
-
-export interface StoryViewEntry {
-  id: number;
-  username: string;
-  fullName?: string | null;
-  avatar?: string | null;
-  viewedAt: Date | string;
-}
-
-export interface StoryItem extends Memory {
-  author?: User;
-  hasViewed?: boolean;
-  viewers?: StoryViewEntry[];
-  createdByCurrentUser?: boolean;
-  storyContent?: string;
-  albumName?: string;
+  sender?: MemorySender;
 }
 
 export type AlbumPermission = "view" | "add" | "edit" | "admin";
@@ -96,6 +104,8 @@ export interface Album {
   role?: AlbumRole;
   // memoryCount is returned by some API endpoints for convenience
   memoryCount?: number;
+  stats?: { total: number; photos: number; videos: number; audio: number };
+  collaborators?: CollaboratorEntry[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -180,12 +190,10 @@ export type SocketEvent =
   | "typing"
   | "stopped_typing"
   | "new_memory"
-  | "new_story"
   | "memory_pinned"
   | "memory_archived"
   | "memory_updated"
   | "memory_deleted"
-  | "story_viewed"
   | "unread_update"
   | "user_online"
   | "user_offline";

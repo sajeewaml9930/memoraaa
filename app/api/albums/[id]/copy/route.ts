@@ -78,8 +78,6 @@ export async function POST(
             isFavorite: memory.isFavorite,
             isPinned: memory.isPinned,
             isArchived: memory.isArchived,
-            isStory: false,
-            expiresAt: null,
             viewCount: memory.viewCount,
             memoryDate: memory.memoryDate,
             userId,

@@ -14,6 +14,12 @@ model User {
   id                         Int       @id @default(autoincrement())
   username                   String    @unique @db.VarChar(80)
   email                      String    @unique @db.VarChar(120)
+  emailVerified              Boolean   @default(false) @map("email_verified")
+  twoFactorEnabled           Boolean   @default(false) @map("two_factor_enabled")
+  isActive                   Boolean   @default(true) @map("is_active")
+  wallpaperType              String    @default("default") @map("wallpaper_type") @db.VarChar(20)
+  wallpaperValue             String?   @map("wallpaper_value") @db.VarChar(120)
+  wallpaperImagePath         String?   @map("wallpaper_image_path") @db.VarChar(500)
   passwordHash               String    @map("password_hash") @db.VarChar(128)
   encryptionKey              String    @map("encryption_key") @db.VarChar(128)
   fullName                   String?   @map("full_name") @db.VarChar(100)
@@ -38,12 +44,25 @@ model User {
   sharedAlbums    SharedAlbum[]
   albumMutes      AlbumMute[]
   backupJobs      BackupJob[]
-  storyViews      StoryView[]
   searchHistory   SearchHistory[]
   sharedMemoryLinks SharedMemoryLink[]
   memoryMentions  MemoryMention[]
   notifications   Notification[]
   memoryReactions MemoryReaction[]
+  verificationTokens VerificationToken[]
+}
+
+model VerificationToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique @db.VarChar(6)
+  expiresAt DateTime @map("expires_at")
+  type      String   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("verification_tokens")
 }
 
 model SearchHistory {
@@ -106,8 +125,6 @@ model Memory {
   isPinned           Boolean   @default(false) @map("is_pinned")
   pinnedAt           DateTime? @map("pinned_at")
   isArchived         Boolean   @default(false) @map("is_archived")
-  isStory            Boolean   @default(false) @map("is_story")
-  expiresAt          DateTime? @map("expires_at")
   viewCount          Int       @default(0) @map("view_count")
   memoryDate         DateTime  @map("memory_date") @db.Date
   userId             Int       @map("user_id")
@@ -121,25 +138,12 @@ model Memory {
   forwardedTo        Memory[]   @relation("Forward")
   albums             AlbumMemory[]
   tags               MemoryTag[]
-  storyViews         StoryView[]
   sharedMemoryLinks  SharedMemoryLink[]
   mentions           MemoryMention[]
   notifications      Notification[]
   reactions          MemoryReaction[]
 
   @@map("memories")
-}
-
-model StoryView {
-  userId    Int      @map("user_id")
-  memoryId  Int      @map("memory_id")
-  viewedAt  DateTime @default(now()) @map("viewed_at")
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memory    Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
-
-  @@id([userId, memoryId])
-  @@map("story_views")
 }
 
 model Tag {
@@ -210,6 +214,8 @@ model Notification {
   userId    Int      @map("user_id")
   type      String   @default("mention") @db.VarChar(30)
   message   String   @db.VarChar(255)
+  content   String?  @db.Text
+  link      String?  @db.VarChar(500)
   memoryId  Int?     @map("memory_id")
   read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")

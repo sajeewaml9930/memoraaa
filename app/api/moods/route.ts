@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
       where: {
         userId,
         isArchived: false,
-        isStory: false,
         mood: {
           not: null,
         },

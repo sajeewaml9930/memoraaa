@@ -46,17 +46,6 @@
 ## ✨ Key Features
 
 <div align="center">
-  <table>
-    <tr>
-      <td width="33%" valign="top">
-        <h3>📨 Messaging</h3>
-        <ul align="left">
-          <li>Text notes (rich formatting)</li>
-          <li>Voice notes (5 min)</li>
-          <li>Emoji & sticker support</li>
-          <li>Broadcast & forward</li>
-        </ul>
-      </td>
       <td width="33%" valign="top">
         <h3>📸 Media</h3>
         <ul align="left">
@@ -120,8 +109,7 @@
 | 1 | **Photo Upload** | ✅ | Sharp compression, thumbnails, captions, optional quality preservation |
 | 2 | **Video Upload** | ✅ | FFmpeg compression, thumbnail extraction, duration tracking, inline playback |
 | 3 | **Voice Messages** | ✅ | MediaRecorder API, MP3 compression, waveform visualization |
-| 4 | **Stories/Status** | ✅ | Auto-delete (24h), view count, viewers list |
-| 5 | **Search** | ✅ | Full-text search, filters (type, mood, location), advanced operators, search history |
+| 4 | **Search** | ✅ | Full-text search, filters (type, mood, location), advanced operators, search history |
 | 6 | **Share Memories** | ✅ | Public share tokens, optional expiry, password protection, view counting |
 | 7 | **Memory Editing** | ✅ | Text editing, deletion, timestamp tracking |
 | 8 | **Album Collaboration** | ✅ | Email invites, permission levels (view/add/edit/admin), accept/reject flow |
@@ -202,7 +190,7 @@
 - ✅ Relationships (Users → Albums → Memories)
 - ✅ Tag system (auto & manual)
 - ✅ Shared album support with invitations and permissions
-- ✅ Real-time data structures (StoryViews, Reactions, Mentions)
+- ✅ Real-time data structures (Reactions, Mentions)
 - ✅ Backup and archive systems
 
 #### Core Utilities
@@ -270,17 +258,6 @@
 - ✅ Audio player in UI with native controls
 - ✅ Waveform-style visualization in the bubble
 - ✅ Playback controls and duration display
-</details>
-
-<details>
-<summary><b>Feature 5: Stories/Status</b> ✅</summary>
-
-- ✅ Create story (24h expiry)
-- ✅ Story-specific API
-- ✅ Status view page
-- ✅ Story auto-delete after 24h
-- ✅ Story view count
-- ✅ Story viewers list
 </details>
 
 ---
@@ -902,8 +879,6 @@ memoraa/
 │   │   ├── map/                         # Location-based view
 │   │   ├── search/                      # Search page
 │   │   ├── settings/                    # Settings page
-│   │   ├── status/
-│   │   │   └── page.tsx                 # Stories view
 │   │   ├── components/                  # Reusable components
 │   │   │   ├── NavBar.tsx
 │   │   │   ├── ChatList.tsx
@@ -930,7 +905,6 @@ memoraa/
 │   │   ├── settings/
 │   │   ├── share/
 │   │   ├── stats/
-│   │   ├── stories/
 │   │   ├── tags/
 │   │   └── user/
 │   ├── lib/                             # Utilities
@@ -964,8 +938,6 @@ memoraa/
 │   ├── layout.tsx                       # Root layout
 │   └── globals.css                      # Tailwind + WhatsApp styles
 ├── workers/                             # BullMQ workers (if using)
-│   ├── expire-stories.ts
-│   ├── expire-stories.js
 │   ├── reminder-worker.ts
 │   └── reminder-worker.js
 ├── prisma/
@@ -1003,7 +975,6 @@ memoraa/
 | **SharedAlbum** | Collaborators, permissions, and invite tokens |
 | **AlbumMemory** | Junction table for memories in multiple albums |
 | **MemoryTag** | Junction table for memories with multiple tags |
-| **StoryView** | Tracks views for stories (temporary memories) |
 | **MemoryMention** | User mentions in memories |
 | **Notification** | User notifications for mentions, reactions, invites |
 | **MemoryReaction** | Emoji reactions to memories |
@@ -1032,7 +1003,6 @@ User (1) ────┬─── (N) Album
 
 - **User**: `encryptionKey` – Fernet key for end-to-end encryption.
 - **Memory**: `encryptedContent` – AES-GCM encrypted text; `encryptedFilePath` – encrypted file path.
-- **Memory**: `isStory` – marks memories that expire after 24 hours; `expiresAt` – expiration timestamp.
 - **Album**: `isPinned`, `isArchived`, `passcodeHash` – for album management.
 - **SharedAlbum**: `permission` – view, add, edit, admin; `token` – for invite links.
 - **SharedMemoryLink**: `token` – unique public share link; `passwordHash` – optional password protection; `expiresAt` – optional expiry date.
@@ -1074,14 +1044,6 @@ User (1) ────┬─── (N) Album
 | `POST` | `/api/memories/[id]/favorite` | Toggle favorite |
 | `POST` | `/api/memories/[id]/pin` | Pin/unpin memory |
 | `POST` | `/api/memories/[id]/archive` | Archive memory |
-
-### Stories
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/stories` | Create story (24h expiry) |
-| `GET` | `/api/stories` | Get stories for status view |
-| `POST` | `/api/stories/[id]/view` | Mark story as viewed |
 
 ### Media
 

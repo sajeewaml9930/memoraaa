@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, CalendarRange, FolderOpen, ArrowLeft } from "lucide-react";
 import SearchFilters from "@/app/(dashboard)/components/SearchFilters";
+import LeftPanelLayout from "../components/LeftPanelLayout";
 
 interface SearchResult {
   id: number;
@@ -21,7 +22,6 @@ interface SearchResult {
   status: string;
   isFavorite: boolean;
   isPinned: boolean;
-  isStory: boolean;
 }
 
 interface RecentSearch {
@@ -568,10 +568,11 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col bg-gray-50">
+    <LeftPanelLayout>
+      <div className="flex min-h-full flex-col bg-gray-50">
       <div className="border-b border-gray-200 bg-white px-6 py-4">
         <div className="mb-4 flex items-center gap-3">
-          <Link href="/chats" className="rounded-full p-2 text-gray-500 hover:bg-gray-100">
+          <Link href="/albums" className="rounded-full p-2 text-gray-500 hover:bg-gray-100">
             <ArrowLeft size={18} />
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Search memories</h1>
@@ -781,7 +782,7 @@ export default function SearchPage() {
               {results.map((memory) => (
                 <Link
                   key={memory.id}
-                  href={memory.albumId ? `/album/${memory.albumId}` : `/chats`}
+                  href={memory.albumId ? `/album/${memory.albumId}` : `/albums`}
                   className="block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow-md"
                 >
                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -836,6 +837,7 @@ export default function SearchPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </LeftPanelLayout>
   );
 }

@@ -53,10 +53,16 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: sanitizeUser(user) }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: sanitizeUser(user) },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error fetching user profile:", error);
-    return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch profile" },
+      { status: 500 },
+    );
   }
 }
 
@@ -77,11 +83,15 @@ export async function PATCH(request: NextRequest) {
     const updateFields: Record<string, string | null> = {};
 
     if (typeof body?.fullName !== "undefined") {
-      const nextFullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+      const nextFullName =
+        typeof body.fullName === "string" ? body.fullName.trim() : "";
       if (nextFullName === "") {
         updateFields.fullName = null;
       } else if (nextFullName.length > 100) {
-        return NextResponse.json({ error: "Full name must be 100 characters or fewer" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Full name must be 100 characters or fewer" },
+          { status: 400 },
+        );
       } else {
         updateFields.fullName = nextFullName;
       }
@@ -91,15 +101,19 @@ export async function PATCH(request: NextRequest) {
       const nextBio = typeof body.bio === "string" ? body.bio.trim() : "";
       if (nextBio === "") {
         updateFields.bio = null;
-      } else if (nextBio.length > 200) {
-        return NextResponse.json({ error: "Bio must be 200 characters or fewer" }, { status: 400 });
+      } else if (nextBio.length > 50) {
+        return NextResponse.json(
+          { error: "Bio must be 50 characters or fewer" },
+          { status: 400 },
+        );
       } else {
         updateFields.bio = nextBio;
       }
     }
 
     if (typeof body?.username !== "undefined") {
-      const nextUsername = typeof body.username === "string" ? body.username.trim() : "";
+      const nextUsername =
+        typeof body.username === "string" ? body.username.trim() : "";
       const currentUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { username: true },
@@ -107,15 +121,23 @@ export async function PATCH(request: NextRequest) {
       const isCurrentUsername = currentUser?.username === nextUsername;
 
       if (!nextUsername) {
-        return NextResponse.json({
-          error: "Username must be 3-20 characters using letters, numbers, or underscores",
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            error:
+              "Username must be 3-20 characters using letters, numbers, or underscores",
+          },
+          { status: 400 },
+        );
       }
 
       if (!isCurrentUsername && !USERNAME_REGEX.test(nextUsername)) {
-        return NextResponse.json({
-          error: "Username must be 3-20 characters using letters, numbers, or underscores",
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            error:
+              "Username must be 3-20 characters using letters, numbers, or underscores",
+          },
+          { status: 400 },
+        );
       }
 
       if (!isCurrentUsername) {
@@ -128,7 +150,10 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (existingUsername) {
-          return NextResponse.json({ error: "Username already taken" }, { status: 409 });
+          return NextResponse.json(
+            { error: "Username already taken" },
+            { status: 409 },
+          );
         }
       }
 
@@ -139,7 +164,10 @@ export async function PATCH(request: NextRequest) {
       const nextEmail = typeof body.email === "string" ? body.email.trim() : "";
 
       if (!nextEmail || !EMAIL_REGEX.test(nextEmail)) {
-        return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Please enter a valid email address" },
+          { status: 400 },
+        );
       }
 
       const existingEmail = await prisma.user.findFirst({
@@ -151,14 +179,20 @@ export async function PATCH(request: NextRequest) {
       });
 
       if (existingEmail) {
-        return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+        return NextResponse.json(
+          { error: "Email already in use" },
+          { status: 409 },
+        );
       }
 
       updateFields.email = nextEmail;
     }
 
     if (Object.keys(updateFields).length === 0) {
-      return NextResponse.json({ error: "No profile fields provided" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No profile fields provided" },
+        { status: 400 },
+      );
     }
 
     const updatedUser = await prisma.user.update({
@@ -174,10 +208,16 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, data: sanitizeUser(updatedUser) }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: sanitizeUser(updatedUser) },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error updating user profile:", error);
-    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update profile" },
+      { status: 500 },
+    );
   }
 }
 

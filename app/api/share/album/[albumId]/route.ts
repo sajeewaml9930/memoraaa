@@ -5,6 +5,7 @@ import { authConfig } from "@/app/lib/auth";
 import prisma from "@/app/lib/prisma";
 import { hasAlbumPermission } from "@/app/lib/permissions";
 import { sendAlbumInvitationEmail } from "@/app/lib/email";
+import { emitToUser } from "@/app/lib/socket";
 
 export async function POST(
   request: NextRequest,
@@ -40,7 +41,10 @@ export async function POST(
       }
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) as {
+      email?: unknown;
+      permission?: unknown;
+    };
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     const permission = typeof body?.permission === "string" ? body.permission : "view";
 
@@ -49,7 +53,7 @@ export async function POST(
     }
 
     const allowedPermission = ["view", "add", "edit", "admin"] as const;
-    if (!allowedPermission.includes(permission as any)) {
+    if (!allowedPermission.includes(permission as (typeof allowedPermission)[number])) {
       return NextResponse.json({ error: "Invalid permission" }, { status: 400 });
     }
 
@@ -94,16 +98,66 @@ export async function POST(
         });
 
     const inviteUrl = `${new URL(request.url).origin}/invite/${invite.token ?? inviteToken}`;
+    const inviterName = session.user.name ?? "A Memoraa collaborator";
+    let notificationStatus: "created" | "failed" = "created";
     try {
-      await sendAlbumInvitationEmail({
+      const notification = await prisma.notification.create({
+        data: {
+          userId: invitedUser.id,
+          type: "invite",
+          message: `${inviterName} invited you to collaborate on ${album.name}`,
+          content: JSON.stringify({
+            albumId: album.id,
+            albumName: album.name,
+            inviterName,
+            permission,
+          }),
+          link: `/invite/${invite.token ?? inviteToken}`,
+        },
+      });
+      console.info("[invite.create] In-app notification created", {
+        inviteId: invite.id,
+        recipientId: invitedUser.id,
+      });
+      emitToUser("notification", invitedUser.id, notification);
+    } catch (notificationError) {
+      notificationStatus = "failed";
+      console.error("[invite.create] In-app notification creation failed", {
+        inviteId: invite.id,
+        recipientId: invitedUser.id,
+        error: notificationError,
+      });
+    }
+
+    let emailStatus: { sent: boolean; skipped?: boolean; messageId?: string; error?: string };
+    try {
+      const emailResult = await sendAlbumInvitationEmail({
         to: invitedUser.email,
         albumName: album.name,
-        inviterName: session.user.name ?? "A Memoraa collaborator",
+        inviterName,
         inviteUrl,
         permission,
       });
+      emailStatus = emailResult.skipped
+        ? { sent: false, skipped: true }
+        : { sent: true, messageId: emailResult.messageId };
+      console.info("[invite.create] Invitation email processed", {
+        inviteId: invite.id,
+        albumId: album.id,
+        recipient: invitedUser.email,
+        ...emailStatus,
+      });
     } catch (emailError) {
-      console.warn("Invite email delivery failed:", emailError);
+      emailStatus = {
+        sent: false,
+        error: emailError instanceof Error ? emailError.message : "Unknown email error",
+      };
+      console.error("[invite.create] Invitation email delivery failed", {
+        inviteId: invite.id,
+        albumId: album.id,
+        recipient: invitedUser.email,
+        error: emailError,
+      });
     }
 
     return NextResponse.json({
@@ -114,6 +168,8 @@ export async function POST(
         token: invite.token ?? inviteToken,
         inviteUrl,
         inviteExpiresAt: invite.inviteExpiresAt ?? inviteExpiresAt,
+        email: emailStatus,
+        notification: { created: notificationStatus === "created" },
         album: { id: album.id, name: album.name },
         user: {
           id: invitedUser.id,

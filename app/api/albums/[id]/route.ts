@@ -78,6 +78,9 @@ export async function GET(
         OR: [{ userId }, { sharedAlbums: { some: { userId, accepted: true } } }],
       },
       include: {
+        user: {
+          select: { id: true, email: true, fullName: true },
+        },
         _count: {
           select: { memories: true },
         },
@@ -106,7 +109,21 @@ export async function GET(
       );
     }
 
-    const { passcodeHash, _count, ...albumData } = album;
+    const albumMemories = await prisma.albumMemory.findMany({
+      where: { albumId, memory: { isArchived: false } },
+      select: { memory: { select: { memoryType: true } } },
+    });
+    const stats = albumMemories.reduce(
+      (counts, entry) => {
+        counts.total += 1;
+        if (entry.memory.memoryType === "photo") counts.photos += 1;
+        if (entry.memory.memoryType === "video") counts.videos += 1;
+        if (entry.memory.memoryType === "voice" || entry.memory.memoryType === "audio") counts.audio += 1;
+        return counts;
+      },
+      { total: 0, photos: 0, videos: 0, audio: 0 }
+    );
+    const { passcodeHash, _count, user: owner, ...albumData } = album;
     const collaboratorPermission = album.sharedAlbums.find((entry) => entry.userId === userId)?.permission ?? null;
 
     return NextResponse.json(
@@ -116,6 +133,8 @@ export async function GET(
           ...albumData,
           isLocked: Boolean(passcodeHash),
           memoryCount: _count.memories,
+          stats,
+          owner,
           role: album.userId === userId ? "owner" : "collaborator",
           permission: collaboratorPermission,
           collaborators: album.sharedAlbums.map((entry) => ({

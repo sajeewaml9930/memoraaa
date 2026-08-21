@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/app/lib/auth";
 import prisma from "@/app/lib/prisma";
+import { emitToUser } from "@/app/lib/socket";
 import { emitToAlbum } from "@/app/lib/socket";
 
 export async function POST(
@@ -32,6 +33,13 @@ export async function POST(
       return NextResponse.json({ error: "Invite not found" }, { status: 404 });
     }
 
+    console.info("[invite.accept] Invite loaded", {
+      inviteId: invite.id,
+      albumId: invite.albumId,
+      intendedUserId: invite.userId,
+      acceptingUserId: userId,
+    });
+
     if (invite.inviteExpiresAt && new Date(invite.inviteExpiresAt).getTime() <= Date.now()) {
       return NextResponse.json({ error: "This invite has expired" }, { status: 410 });
     }
@@ -47,32 +55,64 @@ export async function POST(
       }
     }
 
-    const existingShare = await prisma.sharedAlbum.findFirst({
-      where: {
-        albumId: invite.albumId,
-        userId,
-      },
-    });
-
-    if (existingShare) {
-      await prisma.sharedAlbum.update({
-        where: { id: existingShare.id },
-        data: { accepted: true, permission: invite.permission },
-      });
-    } else {
-      await prisma.sharedAlbum.create({
-        data: {
+    await prisma.$transaction(async (transaction) => {
+      const existingShare = await transaction.sharedAlbum.findFirst({
+        where: {
           albumId: invite.albumId,
           userId,
-          permission: invite.permission,
-          accepted: true,
-          muted: false,
-          invitedAt: new Date(),
+          id: { not: invite.id },
         },
       });
+
+      if (existingShare) {
+        await transaction.sharedAlbum.update({
+          where: { id: existingShare.id },
+          data: { accepted: true, permission: invite.permission },
+        });
+        await transaction.sharedAlbum.delete({ where: { id: invite.id } });
+      } else {
+        await transaction.sharedAlbum.update({
+          where: { id: invite.id },
+          data: { accepted: true },
+        });
+      }
+
+      if (invite.album.userId !== userId) {
+        await transaction.notification.create({
+          data: {
+            userId: invite.album.userId,
+            type: "invite_accepted",
+            message: `${session.user.name ?? session.user.email ?? "A collaborator"} accepted your invitation to ${invite.album.name}`,
+            content: JSON.stringify({
+              albumId: invite.albumId,
+              albumName: invite.album.name,
+              userId,
+            }),
+            link: `/album/${invite.albumId}`,
+          },
+        });
+      }
+
+      await transaction.notification.updateMany({
+        where: {
+          userId,
+          type: "invite",
+          link: `/invite/${token}`,
+        },
+        data: { read: true },
+      });
+    });
+
+    if (invite.album.userId !== userId) {
+      emitToUser("notification", invite.album.userId, { userId: invite.album.userId });
     }
 
-    await prisma.sharedAlbum.delete({ where: { id: invite.id } });
+    console.info("[invite.accept] Invitation accepted", {
+      inviteId: invite.id,
+      albumId: invite.albumId,
+      userId,
+      permission: invite.permission,
+    });
     emitToAlbum("album_shared", invite.albumId, { albumId: invite.albumId, userId, permission: invite.permission });
 
     return NextResponse.json({ success: true, message: "Invitation accepted" });

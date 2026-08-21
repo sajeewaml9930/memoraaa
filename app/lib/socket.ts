@@ -18,3 +18,10 @@ export function emitToAlbum(event: string, albumId: number, payload: unknown) {
   io.to(`album:${albumId}`).emit(event, payload);
   return true;
 }
+
+export function emitToUser(event: string, userId: number, payload: unknown) {
+  const io = getSocketServer();
+  if (!io) return false;
+  io.to(`notifications:${userId}`).emit(event, payload);
+  return true;
+}

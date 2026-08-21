@@ -4,19 +4,23 @@ import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ReactivateAccountDialog } from "../components/ReactivateAccountDialog";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isDeactivated, setIsDeactivated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionExpired = searchParams.get("reason") === "session-expired";
+  const emailVerified = searchParams.get("verified") === "true";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    setIsDeactivated(false);
     setIsLoading(true);
 
     try {
@@ -26,10 +30,17 @@ function LoginForm() {
         redirect: false,
       });
 
-      if (result?.error) {
+      if (result?.error?.includes("EMAIL_NOT_VERIFIED")) {
+        router.push(
+          `/verify-email?email=${encodeURIComponent(email.trim())}&from=login`,
+        );
+      } else if (result?.error?.includes("ACCOUNT_DEACTIVATED")) {
+        setIsDeactivated(true);
+        setError("This account is deactivated.");
+      } else if (result?.error) {
         setError(result.error);
       } else if (result?.ok) {
-        router.push("/chats");
+        router.push("/albums");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -49,7 +60,10 @@ function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700"
+            >
               Email Address
             </label>
             <input
@@ -64,7 +78,10 @@ function LoginForm() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
               Password
             </label>
             <input
@@ -80,7 +97,14 @@ function LoginForm() {
 
           {sessionExpired && !error && (
             <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              Your session has expired or your account was removed. Please log in again.
+              Your session has expired or your account was removed. Please log
+              in again.
+            </div>
+          )}
+
+          {emailVerified && !error && (
+            <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
+              Email verified. You can now sign in.
             </div>
           )}
 
@@ -97,11 +121,18 @@ function LoginForm() {
           >
             {isLoading ? "Signing in..." : "Sign In"}
           </button>
+
+          {isDeactivated && (
+            <ReactivateAccountDialog email={email.trim()} password={password} />
+          )}
         </form>
 
         <div className="mt-6 text-center text-sm">
           <span className="text-gray-600">Don&apos;t have an account? </span>
-          <Link href="/register" className="font-semibold text-blue-600 hover:text-blue-700">
+          <Link
+            href="/register"
+            className="font-semibold text-blue-600 hover:text-blue-700"
+          >
             Create one
           </Link>
         </div>

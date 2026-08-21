@@ -1,741 +1,887 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bar, Line } from "react-chartjs-2";
-import {
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { MOOD_META } from "@/app/lib/moods";
+import {
+  Bell,
+  BookOpen,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  Clock3,
+  FileKey2,
+  FolderArchive,
+  KeyRound,
+  Lock,
+  LogOut,
+  MessageCircle,
+  Moon,
+  Palette,
+  Search,
+  Shield,
+  Smartphone,
+  User,
+  X,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { ChangePasswordDialog } from "../components/ChangePasswordDialog";
+import { AccountActionsDialog } from "../components/AccountActionsDialog";
+import { ProfileAvatar } from "../components/ProfileAvatar";
+import { TwoFactorToggle } from "../components/TwoFactorToggle";
+import { ModeToggle } from "@/app/components/mode-toggle";
+import { WallpaperSettings } from "./components/WallpaperSettings";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, ArcElement);
-
-type ProfileForm = {
+type CategoryId =
+  | "profile"
+  | "account"
+  | "privacy"
+  | "notifications"
+  | "chats"
+  | "shortcuts"
+  | "help";
+type Profile = {
   fullName: string;
   username: string;
   email: string;
   bio: string;
   avatar: string | null;
 };
-
-type ReminderSettings = {
+type Reminders = {
   dailyReminderTime: string | null;
   dailyReminderEnabled: boolean;
   timezone: string;
   lastReminderSent: string | null;
 };
+type Album = { id: number; name: string; isMuted?: boolean };
 
-const emptyProfile: ProfileForm = {
+const emptyProfile: Profile = {
   fullName: "",
   username: "",
   email: "",
   bio: "",
   avatar: null,
 };
-
-const emptyReminders: ReminderSettings = {
-  dailyReminderTime: null,
+const emptyReminders: Reminders = {
+  dailyReminderTime: "09:00",
   dailyReminderEnabled: true,
   timezone: "UTC",
   lastReminderSent: null,
 };
+const categories: Array<{
+  id: CategoryId;
+  label: string;
+  description: string;
+  icon: typeof User;
+  keywords: string;
+}> = [
+  {
+    id: "profile",
+    label: "Profile",
+    description: "Name, picture and about",
+    icon: User,
+    keywords: "avatar username bio name",
+  },
+  {
+    id: "account",
+    label: "Account",
+    description: "Security and account details",
+    icon: KeyRound,
+    keywords: "password security delete two factor",
+  },
+  {
+    id: "privacy",
+    label: "Privacy",
+    description: "Locks, sharing and encryption",
+    icon: Shield,
+    keywords: "passcode biometric encryption local",
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    description: "Alerts, reminders and sounds",
+    icon: Bell,
+    keywords: "email in app reminders albums mute",
+  },
+  {
+    id: "chats",
+    label: "Chats and albums",
+    description: "Theme and album defaults",
+    icon: MessageCircle,
+    keywords: "wallpaper theme archive privacy background",
+  },
+  {
+    id: "shortcuts",
+    label: "Keyboard shortcuts",
+    description: "Move around Memoraa faster",
+    icon: Smartphone,
+    keywords: "keyboard ctrl command search",
+  },
+  {
+    id: "help",
+    label: "Help and feedback",
+    description: "Guides, support and legal",
+    icon: HelpCircle,
+    keywords: "help faq support bug privacy terms",
+  },
+];
+
+function PlannedBadge() {
+  return (
+    <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      Coming soon
+    </span>
+  );
+}
+function SettingRow({
+  icon: Icon,
+  title,
+  description,
+  children,
+  disabled = false,
+}: {
+  icon: typeof User;
+  title: string;
+  description: string;
+  children?: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-4 border-b border-border py-4 last:border-0 ${disabled ? "opacity-55" : ""}`}
+    >
+      <Icon className="size-5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { data: session, update } = useSession();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [profile, setProfile] = useState<ProfileForm>(emptyProfile);
-  const [reminders, setReminders] = useState<ReminderSettings>(emptyReminders);
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
-  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingReminders, setLoadingReminders] = useState(true);
-  const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [reminders, setReminders] = useState<Reminders>(emptyReminders);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [inAppNotifications, setInAppNotifications] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingReminders, setSavingReminders] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [moodStats, setMoodStats] = useState<{
-    distribution: Array<{ mood: string; count: number; percentage: number; emoji: string; label: string }>;
-    timeline: Array<{ date: string; averageScore: number; dominantMood: string | null }>;
-    totalWithMood: number;
-    streak: { longestAnyStreak: number; longestPositiveStreak: number };
-    summary: {
-      mostCommonMood: { mood: string; emoji: string; label: string; percentage: number } | null;
-      totalMoodsTracked: number;
-    };
-  } | null>(null);
-  const [moodStatsLoading, setMoodStatsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const load = async () => {
       try {
-        const response = await fetch("/api/user/profile");
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Unable to load profile");
+        const responses = await Promise.all([
+          fetch("/api/user/profile"),
+          fetch("/api/settings/reminders"),
+          fetch("/api/settings/notifications"),
+          fetch("/api/albums"),
+        ]);
+        const [profileData, reminderData, notificationData, albumsData] =
+          await Promise.all(
+            responses.map((response) => response.json().catch(() => ({}))),
+          );
+        if (responses[0].ok)
+          setProfile({
+            fullName: profileData?.data?.fullName ?? "",
+            username: profileData?.data?.username ?? "",
+            email: profileData?.data?.email ?? "",
+            bio: profileData?.data?.bio ?? "",
+            avatar: profileData?.data?.avatar ?? null,
+          });
+        if (responses[1].ok)
+          setReminders({ ...emptyReminders, ...reminderData?.data });
+        if (responses[2].ok) {
+          setEmailNotifications(
+            Boolean(notificationData?.data?.emailNotificationsEnabled),
+          );
+          setInAppNotifications(
+            Boolean(notificationData?.data?.inAppNotificationsEnabled),
+          );
         }
-
-        setProfile({
-          fullName: data?.data?.fullName ?? "",
-          username: data?.data?.username ?? "",
-          email: data?.data?.email ?? "",
-          bio: data?.data?.bio ?? "",
-          avatar: data?.data?.avatar ?? null,
-        });
-      } catch (loadError) {
-        console.error("Error fetching profile:", loadError);
-        setError(loadError instanceof Error ? loadError.message : "Unable to load profile");
+        if (responses[3].ok)
+          setAlbums(Array.isArray(albumsData?.data) ? albumsData.data : []);
+      } catch {
+        setError("Some settings could not be loaded.");
       } finally {
-        setLoadingProfile(false);
+        setLoading(false);
       }
     };
-
-    const fetchReminders = async () => {
-      try {
-        const response = await fetch("/api/settings/reminders");
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Unable to load reminder settings");
-        }
-
-        const tz = typeof Intl !== "undefined" && Intl.DateTimeFormat
-          ? Intl.DateTimeFormat().resolvedOptions().timeZone
-          : "UTC";
-
-        setReminders({
-          dailyReminderTime: data?.data?.dailyReminderTime ?? null,
-          dailyReminderEnabled: data?.data?.dailyReminderEnabled ?? true,
-          timezone: data?.data?.timezone ?? tz,
-          lastReminderSent: data?.data?.lastReminderSent ?? null,
-        });
-      } catch (loadError) {
-        console.error("Error fetching reminder settings:", loadError);
-      } finally {
-        setLoadingReminders(false);
-      }
-    };
-
-    const fetchSettings = async () => {
-      try {
-        const response = await fetch("/api/settings/notifications");
-        const data = await response.json();
-        if (response.ok && data?.data) {
-          setEmailNotificationsEnabled(Boolean(data.data.emailNotificationsEnabled));
-          setInAppNotificationsEnabled(Boolean(data.data.inAppNotificationsEnabled));
-        }
-      } catch (fetchError) {
-        console.error("Error fetching notification settings:", fetchError);
-      } finally {
-        setLoadingNotifications(false);
-      }
-    };
-
-    const fetchMoodStats = async () => {
-      try {
-        const response = await fetch("/api/stats/moods");
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(payload?.error || "Unable to load mood statistics");
-        }
-
-        setMoodStats(payload?.data ?? null);
-      } catch (statsError) {
-        console.error("Error fetching mood statistics:", statsError);
-        setMoodStats(null);
-      } finally {
-        setMoodStatsLoading(false);
-      }
-    };
-
-    void fetchProfile();
-    void fetchReminders();
-    void fetchSettings();
-    void fetchMoodStats();
+    void load();
   }, []);
 
-  const updateSetting = async (updates: {
-    emailNotificationsEnabled?: boolean;
-    inAppNotificationsEnabled?: boolean;
-  }) => {
-    try {
-      const response = await fetch("/api/settings/notifications", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
+  const filteredCategories = useMemo(
+    () =>
+      categories.filter((category) =>
+        `${category.label} ${category.description} ${category.keywords}`
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()),
+      ),
+    [searchQuery],
+  );
+  const currentCategory = categories.find(
+    (category) => category.id === activeCategory,
+  );
+  const showSidebar = activeCategory === null;
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.error || "Failed to update settings");
-      }
-    } catch (settingsError) {
-      console.error("Error updating settings:", settingsError);
-      window.alert(
-        settingsError instanceof Error ? settingsError.message : "Unable to update notification settings"
-      );
-    }
-  };
-
-  const handleProfileChange = (key: keyof ProfileForm, value: string) => {
-    setProfile((current) => ({ ...current, [key]: value }));
-  };
-
-  const handleProfileSave = async () => {
-    setError(null);
-    setMessage(null);
+  const saveProfile = async () => {
     setSavingProfile(true);
-
+    setNotice(null);
+    setError(null);
     try {
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: profile.fullName,
-          username: profile.username,
-          email: profile.email,
-          bio: profile.bio,
-        }),
+        body: JSON.stringify(profile),
       });
-
       const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(payload?.error || "Unable to save profile");
-      }
-
-      const nextName = payload?.data?.fullName || payload?.data?.username || session?.user?.name || "You";
       await update?.({
-        name: nextName,
-        image: payload?.data?.avatar || session?.user?.image || undefined,
+        name: profile.fullName || profile.username,
+        image: profile.avatar || undefined,
       });
-      setMessage("Profile saved successfully.");
-      setProfile((current) => ({
-        ...current,
-        avatar: payload?.data?.avatar ?? current.avatar,
-      }));
+      setNotice("Profile saved.");
     } catch (saveError) {
-      console.error("Error saving profile:", saveError);
-      setError(saveError instanceof Error ? saveError.message : "Unable to save profile");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save profile",
+      );
     } finally {
       setSavingProfile(false);
     }
   };
 
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setError(null);
-    setMessage(null);
-    setUploadingAvatar(true);
-
+  const updateNotifications = async (updates: {
+    emailNotificationsEnabled?: boolean;
+    inAppNotificationsEnabled?: boolean;
+  }) => {
+    const response = await fetch("/api/settings/notifications", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) throw new Error("Unable to update notifications");
+    setNotice("Notification preference saved.");
+  };
+  const toggleAlbumMute = async (album: Album) => {
     try {
-      const formData = new FormData();
-      formData.append("avatar", file);
-
-      const response = await fetch("/api/user/avatar", {
+      const response = await fetch(`/api/albums/${album.id}/mute`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ muted: !album.isMuted }),
       });
-
       const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Avatar upload failed");
-      }
-
-      const nextAvatar = payload?.data?.avatar ? "/api/user/avatar" : null;
-      setProfile((current) => ({ ...current, avatar: nextAvatar }));
-      await update?.({
-        image: nextAvatar || undefined,
-      });
-      setMessage("Avatar updated.");
-    } catch (avatarError) {
-      console.error("Error uploading avatar:", avatarError);
-      setError(avatarError instanceof Error ? avatarError.message : "Avatar upload failed");
-    } finally {
-      setUploadingAvatar(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (!response.ok)
+        throw new Error(payload?.error || "Unable to update album");
+      setAlbums((current) =>
+        current.map((item) =>
+          item.id === album.id
+            ? { ...item, isMuted: payload?.data?.isMuted ?? !album.isMuted }
+            : item,
+        ),
+      );
+    } catch (toggleError) {
+      setError(
+        toggleError instanceof Error
+          ? toggleError.message
+          : "Unable to update album",
+      );
     }
   };
-
-  const handleRemoveAvatar = async () => {
-    setError(null);
-    setMessage(null);
-
-    try {
-      const response = await fetch("/api/user/avatar", { method: "DELETE" });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Unable to remove avatar");
-      }
-
-      setProfile((current) => ({ ...current, avatar: null }));
-      await update?.({ image: undefined });
-      setMessage("Avatar removed.");
-    } catch (removeError) {
-      console.error("Error removing avatar:", removeError);
-      setError(removeError instanceof Error ? removeError.message : "Unable to remove avatar");
-    }
-  };
-
-  const handleReminderChange = (key: keyof ReminderSettings, value: string | boolean | null) => {
-    setReminders((current) => ({ ...current, [key]: value }));
-  };
-
-  const handleReminderSave = async () => {
-    setError(null);
-    setMessage(null);
+  const saveReminders = async () => {
     setSavingReminders(true);
-
     try {
       const response = await fetch("/api/settings/reminders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dailyReminderTime: reminders.dailyReminderTime,
-          dailyReminderEnabled: reminders.dailyReminderEnabled,
-          timezone: reminders.timezone,
-        }),
+        body: JSON.stringify(reminders),
       });
-
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Unable to save reminder settings");
-      }
-
-      setMessage("Reminder settings saved.");
+      if (!response.ok) throw new Error("Unable to save reminders");
+      setNotice("Reminder settings saved.");
     } catch (saveError) {
-      console.error("Error saving reminder settings:", saveError);
-      setError(saveError instanceof Error ? saveError.message : "Unable to save reminder settings");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save reminders",
+      );
     } finally {
       setSavingReminders(false);
     }
   };
 
-  const handleSkipReminder = async () => {
-    try {
-      const response = await fetch("/api/reminders/skip", { method: "POST" });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Unable to skip reminder");
-      }
-
-      setMessage("Reminder skipped for today.");
-    } catch (skipError) {
-      console.error("Error skipping reminder:", skipError);
-      setError(skipError instanceof Error ? skipError.message : "Unable to skip reminder");
-    }
-  };
-
-  const moodDistributionChart = moodStats ? {
-    labels: moodStats.distribution.map((entry) => `${entry.emoji} ${entry.label}`),
-    datasets: [
-      {
-        label: "Memories by mood",
-        data: moodStats.distribution.map((entry) => entry.count),
-        backgroundColor: [
-          "#fbbf24",
-          "#f472b6",
-          "#60a5fa",
-          "#f87171",
-          "#6ee7b7",
-          "#a78bfa",
-          "#cbd5e1",
-          "#f59e0b",
-          "#fb7185",
-          "#34d399",
-        ],
-      },
-    ],
-  } : null;
-
-  const moodTimelineChart = moodStats ? {
-    labels: moodStats.timeline.map((entry) => entry.date.slice(5)),
-    datasets: [
-      {
-        label: "Mood score",
-        data: moodStats.timeline.map((entry) => entry.averageScore),
-        borderColor: "#2563eb",
-        backgroundColor: "rgba(37, 99, 235, 0.12)",
-        tension: 0.35,
-        fill: true,
-      },
-    ],
-  } : null;
+  const renderProfile = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Profile</CardTitle>
+        <CardDescription>
+          Make your Memoraa profile feel like yours.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <ProfileAvatar
+          avatar={profile.avatar}
+          fullName={profile.fullName || profile.username}
+          onAvatarChange={(avatar) =>
+            setProfile((current) => ({ ...current, avatar }))
+          }
+          onStatus={(message, isError) => {
+            if (isError) setError(message);
+            else setNotice(message);
+          }}
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium">
+            Full name<span style={{ color: "red", marginLeft: "4px" }}>*</span>
+            <Input
+              value={profile.fullName}
+              onChange={(event) =>
+                setProfile({ ...profile, fullName: event.target.value })
+              }
+            />
+          </label>
+          <label className="space-y-2 text-sm font-medium">
+            Username<span style={{ color: "red", marginLeft: "4px" }}>*</span>
+            <Input
+              value={profile.username}
+              onChange={(event) =>
+                setProfile({ ...profile, username: event.target.value })
+              }
+            />
+          </label>
+        </div>
+        <label className="block space-y-2 text-sm font-medium">
+          Email<span style={{ color: "red", marginLeft: "4px" }}>*</span>
+          <Input
+            type="email"
+            value={profile.email}
+            onChange={(event) =>
+              setProfile({ ...profile, email: event.target.value })
+            }
+          />
+        </label>
+        <label className="block space-y-2 text-sm font-medium">
+          About
+          <textarea
+            value={profile.bio}
+            maxLength={50}
+            onChange={(event) =>
+              setProfile({ ...profile, bio: event.target.value })
+            }
+            className="min-h-24 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <p className="text-xs text-muted-foreground">
+            {profile.bio.length}/50 characters
+          </p>
+        </label>
+        <Button onClick={saveProfile} disabled={savingProfile || loading}>
+          {savingProfile ? "Saving..." : "Save profile"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+  const renderAccount = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+        <CardDescription>
+          Keep your account secure and review its details.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingRow
+          icon={KeyRound}
+          title="Change password"
+          description="Update the password used to sign in to Memoraa"
+        >
+          <ChangePasswordDialog />
+        </SettingRow>
+        <SettingRow
+          icon={FileKey2}
+          title="Two-factor authentication"
+          description="Verify your identity with an extra security step"
+        >
+          <TwoFactorToggle />
+        </SettingRow>
+        <SettingRow
+          icon={User}
+          title="Account email"
+          description={profile.email || "Loading account email"}
+        />
+        <SettingRow
+          icon={LogOut}
+          title="Deactivate or delete account"
+          description="Temporarily disable or permanently remove your account"
+        >
+          <AccountActionsDialog />
+        </SettingRow>
+      </CardContent>
+    </Card>
+  );
+  const renderPrivacy = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Privacy</CardTitle>
+        <CardDescription>
+          Control locks, sharing and the protection around your memories.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingRow
+          icon={Lock}
+          title="Album passcodes"
+          description="Set or change a passcode from the album lock controls"
+        >
+          <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={Shield}
+          title="Encryption status"
+          description="Your memories are protected by the existing encryption layer"
+        >
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+            <Check className="size-4" /> Active
+          </span>
+        </SettingRow>
+        <SettingRow
+          icon={Smartphone}
+          title="Biometric lock"
+          description="Use device biometrics to unlock Memoraa"
+          disabled
+        >
+          <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={Lock}
+          title="Local-only mode"
+          description="Keep a private local vault on this device"
+          disabled
+        >
+          <PlannedBadge />
+        </SettingRow>
+      </CardContent>
+    </Card>
+  );
+  const renderNotifications = () => (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>
+            Choose how Memoraa keeps you informed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettingRow
+            icon={Bell}
+            title="In-app notifications"
+            description="Show activity and memory updates in Memoraa"
+          >
+            <Switch
+              checked={inAppNotifications}
+              onCheckedChange={async (checked) => {
+                setInAppNotifications(checked);
+                try {
+                  await updateNotifications({
+                    inAppNotificationsEnabled: checked,
+                  });
+                } catch {
+                  setInAppNotifications(!checked);
+                  setError("Unable to update notifications");
+                }
+              }}
+            />
+          </SettingRow>
+          <SettingRow
+            icon={Bell}
+            title="Email notifications"
+            description="Receive important updates by email"
+          >
+            <Switch
+              checked={emailNotifications}
+              onCheckedChange={async (checked) => {
+                setEmailNotifications(checked);
+                try {
+                  await updateNotifications({
+                    emailNotificationsEnabled: checked,
+                  });
+                } catch {
+                  setEmailNotifications(!checked);
+                  setError("Unable to update notifications");
+                }
+              }}
+            />
+          </SettingRow>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Daily reminders</CardTitle>
+          <CardDescription>Make a little room for remembering.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SettingRow
+            icon={Clock3}
+            title="Daily reminder"
+            description="Receive a prompt to write a memory"
+          >
+            <Switch
+              checked={reminders.dailyReminderEnabled}
+              onCheckedChange={(checked) =>
+                setReminders({ ...reminders, dailyReminderEnabled: checked })
+              }
+            />
+          </SettingRow>
+          {reminders.dailyReminderEnabled && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2 text-sm font-medium">
+                Time
+                <Input
+                  type="time"
+                  value={reminders.dailyReminderTime ?? "09:00"}
+                  onChange={(event) =>
+                    setReminders({
+                      ...reminders,
+                      dailyReminderTime: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium">
+                Timezone
+                <Select
+                  value={reminders.timezone}
+                  onValueChange={(value) =>
+                    value && setReminders({ ...reminders, timezone: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                    <SelectItem value="America/New_York">
+                      America/New_York
+                    </SelectItem>
+                    <SelectItem value="Europe/London">Europe/London</SelectItem>
+                    <SelectItem value="Asia/Tokyo">Asia/Tokyo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+          )}
+          <Button onClick={saveReminders} disabled={savingReminders}>
+            {savingReminders ? "Saving..." : "Save reminders"}
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Album notifications</CardTitle>
+          <CardDescription>
+            Mute individual albums without changing global preferences.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {albums.length ? (
+            albums.map((album) => (
+              <SettingRow
+                key={album.id}
+                icon={MessageCircle}
+                title={album.name}
+                description={album.isMuted ? "Muted" : "Notifications enabled"}
+              >
+                <Switch
+                  checked={Boolean(album.isMuted)}
+                  onCheckedChange={() => void toggleAlbumMute(album)}
+                />
+              </SettingRow>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No albums found.</p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+  const renderChats = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Chats and albums</CardTitle>
+        <CardDescription>
+          Choose the way your spaces feel and behave.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingRow
+          icon={Moon}
+          title="Dark mode"
+          description="Use a darker palette at night"
+        >
+          <ModeToggle />
+        </SettingRow>
+        <SettingRow
+          icon={Palette}
+          title="Chat wallpaper"
+          description="Choose a personal background for your memory stream"
+        >
+          <span className="text-xs text-muted-foreground">Customize below</span>
+        </SettingRow>
+        <div className="border-b border-border py-4">
+          <WallpaperSettings />
+        </div>
+        <SettingRow
+          icon={FolderArchive}
+          title="Automatic archive"
+          description="Archive inactive albums automatically"
+          disabled
+        >
+          <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={Shield}
+          title="Default album privacy"
+          description="Choose a default for new albums"
+          disabled
+        >
+          <PlannedBadge />
+        </SettingRow>
+      </CardContent>
+    </Card>
+  );
+  const renderShortcuts = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Keyboard shortcuts</CardTitle>
+        <CardDescription>Quick ways to move through Memoraa.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {[
+          ["Ctrl / Cmd + K", "Open search"],
+          ["Ctrl / Cmd + Enter", "Send a memory"],
+          ["Escape", "Close menus and dialogs"],
+          ["Ctrl / Cmd + ,", "Open settings"],
+        ].map(([key, label]) => (
+          <div
+            key={key}
+            className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-3 text-sm"
+          >
+            <span className="text-slate-600">{label}</span>
+            <kbd className="rounded border border-slate-200 bg-white px-2 py-1 font-mono text-xs text-slate-700">
+              {key}
+            </kbd>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+  const renderHelp = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Help and feedback</CardTitle>
+        <CardDescription>
+          Find answers or help us make Memoraa better.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingRow
+          icon={BookOpen}
+          title="Documentation and FAQ"
+          description="Guides for albums, memories and sharing"
+        >
+          <ChevronRight className="size-4 text-slate-400" />
+        </SettingRow>
+        <SettingRow
+          icon={HelpCircle}
+          title="Contact support"
+          description="Support inbox integration is coming soon"
+        >
+          <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={HelpCircle}
+          title="Report a bug"
+          description="Tell us what went wrong"
+        >
+          <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={Shield}
+          title="Privacy policy and terms"
+          description="Review the legal details"
+        >
+          <ChevronRight className="size-4 text-slate-400" />
+        </SettingRow>
+      </CardContent>
+    </Card>
+  );
+  const content =
+    activeCategory === "profile" ? (
+      renderProfile()
+    ) : activeCategory === "account" ? (
+      renderAccount()
+    ) : activeCategory === "privacy" ? (
+      renderPrivacy()
+    ) : activeCategory === "notifications" ? (
+      renderNotifications()
+    ) : activeCategory === "chats" ? (
+      renderChats()
+    ) : activeCategory === "shortcuts" ? (
+      renderShortcuts()
+    ) : activeCategory === "help" ? (
+      renderHelp()
+    ) : (
+      <div className="flex min-h-[520px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
+        <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300">
+          <Lock className="size-9" />
+        </div>
+        <h2 className="text-xl font-semibold text-card-foreground">
+          Welcome to Memoraa settings
+        </h2>
+        <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          Choose a category to manage your profile, privacy, notifications and
+          the spaces where your memories live.
+        </p>
+      </div>
+    );
 
   return (
-    <div className="flex flex-1 flex-col bg-gray-50 p-8">
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="mt-1 text-sm text-gray-600">Manage your profile and communication preferences.</p>
-
-          {message && (
-            <div className="mt-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              {message}
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+    <div className="flex min-h-full flex-1 flex-col bg-background text-foreground lg:flex-row">
+      <aside
+        className={`${showSidebar ? "flex" : "hidden"} w-full shrink-0 flex-col border-r border-border bg-card lg:flex lg:w-[360px]`}
+      >
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+          <Avatar className="size-12">
+            <AvatarImage
+              src={profile.avatar ?? session?.user?.image ?? undefined}
+            />
+            <AvatarFallback className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+              {(profile.fullName || session?.user?.name || "U")
+                .slice(0, 1)
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold text-slate-800">
+              {profile.fullName || session?.user?.name || "Your profile"}
+            </p>
+            <p className="truncate text-xs text-slate-500">
+              {profile.bio || "Make your memories yours"}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => history.back()}
+            aria-label="Close settings"
+          >
+            <X />
+          </Button>
         </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Profile</h2>
-                <p className="text-sm text-gray-600">Update your personal details and public profile.</p>
-              </div>
+        <div className="border-b border-slate-100 p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search settings"
+              className="h-10 bg-slate-50 pl-9"
+            />
+          </div>
+        </div>
+        <nav className="flex-1 overflow-y-auto p-2">
+          {filteredCategories.map((category) => {
+            const Icon = category.icon;
+            return (
               <button
+                key={category.id}
                 type="button"
-                onClick={handleProfileSave}
-                disabled={savingProfile || loadingProfile}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                onClick={() => setActiveCategory(category.id)}
+                className="flex w-full items-center gap-4 rounded-lg px-4 py-3 text-left transition hover:bg-emerald-50"
               >
-                {savingProfile ? "Saving..." : "Save profile"}
+                <Icon className="size-5 text-slate-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-slate-800">
+                    {category.label}
+                  </span>
+                  <span className="block truncate text-xs text-slate-500">
+                    {category.description}
+                  </span>
+                </span>
+                <ChevronRight className="size-4 text-slate-300" />
               </button>
-            </div>
-
-            {loadingProfile ? (
-              <p className="text-sm text-gray-500">Loading profile...</p>
-            ) : (
-              <div className="space-y-5">
-                <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-gray-200 text-lg font-semibold text-gray-700">
-                    {profile.avatar ? (
-                      <img src={profile.avatar} alt={profile.fullName || profile.username || "Profile avatar"} className="h-full w-full object-cover" />
-                    ) : (
-                      (profile.fullName?.trim()?.charAt(0) || profile.username?.trim()?.charAt(0) || "U").toUpperCase()
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-700">Avatar</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingAvatar}
-                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {uploadingAvatar ? "Uploading..." : "Upload avatar"}
-                      </button>
-                      {profile.avatar && (
-                        <button
-                          type="button"
-                          onClick={handleRemoveAvatar}
-                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="hidden"
-                      onChange={handleAvatarUpload}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Full name
-                    <input
-                      type="text"
-                      value={profile.fullName}
-                      onChange={(event) => handleProfileChange("fullName", event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      placeholder="Your full name"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-medium text-gray-700">
-                    Username
-                    <input
-                      type="text"
-                      value={profile.username}
-                      onChange={(event) => handleProfileChange("username", event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      placeholder="username"
-                    />
-                  </label>
-                </div>
-
-                <label className="block text-sm font-medium text-gray-700">
-                  Email
-                  <input
-                    type="email"
-                    value={profile.email}
-                    onChange={(event) => handleProfileChange("email", event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    placeholder="you@example.com"
-                  />
-                </label>
-
-                <label className="block text-sm font-medium text-gray-700">
-                  Bio
-                  <textarea
-                    value={profile.bio}
-                    onChange={(event) => handleProfileChange("bio", event.target.value)}
-                    rows={4}
-                    maxLength={200}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    placeholder="Tell people a little about yourself"
-                  />
-                  <span className="mt-1 block text-right text-xs text-gray-500">{profile.bio.length}/200</span>
-                </label>
+            );
+          })}
+          {!filteredCategories.length && (
+            <p className="p-4 text-sm text-slate-500">No settings found.</p>
+          )}
+        </nav>
+      </aside>
+      <main
+        className={`${showSidebar ? "hidden lg:flex" : "flex"} min-w-0 flex-1 flex-col`}
+      >
+        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              activeCategory ? setActiveCategory(null) : history.back()
+            }
+            aria-label="Back"
+          >
+            <ChevronLeft />
+          </Button>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-emerald-600">
+              Memoraa
+            </p>
+            <h1 className="text-lg font-semibold text-slate-800">
+              {currentCategory?.label ?? "Settings"}
+            </h1>
+          </div>
+        </header>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="mx-auto max-w-3xl">
+            {notice && (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {notice}
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col gap-6">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-gray-900">Notifications</h2>
-              <p className="mt-1 text-sm text-gray-600">Control the notifications you receive from albums and the app.</p>
-
-              {loadingNotifications ? (
-                <p className="mt-6 text-sm text-gray-500">Loading notification settings...</p>
-              ) : (
-                <div className="mt-6 space-y-4">
-                  <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                    <span className="text-sm font-medium text-gray-700">Enable email notifications</span>
-                    <input
-                      type="checkbox"
-                      checked={emailNotificationsEnabled}
-                      onChange={async (event) => {
-                        const nextValue = event.target.checked;
-                        setEmailNotificationsEnabled(nextValue);
-                        await updateSetting({ emailNotificationsEnabled: nextValue });
-                      }}
-                      className="h-5 w-5"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                    <span className="text-sm font-medium text-gray-700">Enable in-app notifications</span>
-                    <input
-                      type="checkbox"
-                      checked={inAppNotificationsEnabled}
-                      onChange={async (event) => {
-                        const nextValue = event.target.checked;
-                        setInAppNotificationsEnabled(nextValue);
-                        await updateSetting({ inAppNotificationsEnabled: nextValue });
-                      }}
-                      className="h-5 w-5"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Daily Reminders</h2>
-                  <p className="text-xs text-gray-600">Get daily prompts to write memories</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleReminderSave}
-                  disabled={savingReminders || loadingReminders}
-                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {savingReminders ? "Saving..." : "Save"}
-                </button>
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
               </div>
-
-              {loadingReminders ? (
-                <p className="text-sm text-gray-500">Loading reminder settings...</p>
-              ) : (
-                <div className="space-y-4">
-                  <label className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                    <span className="text-sm font-medium text-gray-700">Enable daily reminders</span>
-                    <input
-                      type="checkbox"
-                      checked={reminders.dailyReminderEnabled}
-                      onChange={(event) => handleReminderChange("dailyReminderEnabled", event.target.checked)}
-                      className="h-5 w-5"
-                    />
-                  </label>
-
-                  {reminders.dailyReminderEnabled && (
-                    <>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Reminder time (24-hour format)
-                        <input
-                          type="time"
-                          value={reminders.dailyReminderTime || "09:00"}
-                          onChange={(event) => handleReminderChange("dailyReminderTime", event.target.value)}
-                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </label>
-
-                      <label className="block text-sm font-medium text-gray-700">
-                        Timezone
-                        <select
-                          value={reminders.timezone}
-                          onChange={(event) => handleReminderChange("timezone", event.target.value)}
-                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        >
-                          <option value="UTC">UTC (Coordinated Universal Time)</option>
-                          <option value="America/New_York">America/New_York (EST)</option>
-                          <option value="America/Chicago">America/Chicago (CST)</option>
-                          <option value="America/Denver">America/Denver (MST)</option>
-                          <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                          <option value="Europe/London">Europe/London (GMT)</option>
-                          <option value="Europe/Paris">Europe/Paris (CET)</option>
-                          <option value="Europe/Berlin">Europe/Berlin (CET)</option>
-                          <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-                          <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
-                          <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT)</option>
-                          <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                          <option value="Australia/Sydney">Australia/Sydney (AEDT)</option>
-                          <option value="Australia/Melbourne">Australia/Melbourne (AEDT)</option>
-                        </select>
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={handleSkipReminder}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        Skip today's reminder
-                      </button>
-                    </>
-                  )}
-
-                  {reminders.lastReminderSent && (
-                    <p className="text-xs text-gray-500">
-                      Last reminder sent: {new Date(reminders.lastReminderSent).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            )}
+            {content}
           </div>
         </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Mood Tracking</h2>
-            <p className="text-sm text-gray-600">Track your emotional rhythm and see which moods show up most often.</p>
-          </div>
-
-          {moodStatsLoading ? (
-            <p className="text-sm text-gray-500">Loading mood insights...</p>
-          ) : moodStats ? (
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Most common mood</p>
-                  <div className="mt-3 flex items-center gap-2 text-lg font-semibold text-gray-800">
-                    <span>{moodStats.summary.mostCommonMood?.emoji ?? "✨"}</span>
-                    <span>{moodStats.summary.mostCommonMood ? `${moodStats.summary.mostCommonMood.label} (${moodStats.summary.mostCommonMood.percentage}%)` : "No data"}</span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Memories with mood</p>
-                  <p className="mt-3 text-2xl font-bold text-gray-900">{moodStats.totalWithMood}</p>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Longest streak</p>
-                  <p className="mt-3 text-2xl font-bold text-gray-900">{moodStats.streak.longestPositiveStreak} days</p>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Any mood streak</p>
-                  <p className="mt-3 text-2xl font-bold text-gray-900">{moodStats.streak.longestAnyStreak} days</p>
-                </div>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-600">Mood distribution</h3>
-                  {moodDistributionChart ? (
-                    <Bar
-                      data={moodDistributionChart}
-                      options={{ responsive: true, plugins: { legend: { display: false } } }}
-                    />
-                  ) : (
-                    <p className="text-sm text-gray-500">No mood data yet.</p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-600">Mood trend</h3>
-                  {moodTimelineChart ? (
-                    <Line
-                      data={moodTimelineChart}
-                      options={{ responsive: true, plugins: { legend: { display: false } } }}
-                    />
-                  ) : (
-                    <p className="text-sm text-gray-500">No trend data yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 p-4">
-                <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-600">Detailed distribution</h3>
-                <div className="space-y-3">
-                  {moodStats.distribution.length === 0 ? (
-                    <p className="text-sm text-gray-500">Add a mood to your memories to see the breakdown here.</p>
-                  ) : (
-                    moodStats.distribution.map((entry) => (
-                      <div key={entry.mood} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm text-gray-700">
-                          <span className="inline-flex items-center gap-2">
-                            <span>{entry.emoji}</span>
-                            <span>{entry.label}</span>
-                          </span>
-                          <span>{entry.count} ({entry.percentage}%)</span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                          <div
-                            className="h-full rounded-full bg-blue-500"
-                            style={{ width: `${Math.max(entry.percentage, 3)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No mood data available yet.</p>
-          )}
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

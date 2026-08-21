@@ -12,7 +12,120 @@ const smtpHost = process.env.SMTP_HOST;
 const smtpPort = Number(process.env.SMTP_PORT ?? "587");
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
-const fromAddress = process.env.EMAIL_FROM || "noreply@memoraa.app";
+const fromAddress =
+  process.env.EMAIL_FROM || process.env.SMTP_USER || "noreply@memoraa.app";
+
+interface SendVerificationEmailInput {
+  to: string;
+  otp: string;
+}
+
+interface SendTwoFactorEmailInput {
+  to: string;
+  otp: string;
+}
+
+interface SendAccountReactivationEmailInput {
+  to: string;
+  otp: string;
+}
+
+export async function sendAccountReactivationEmail({
+  to,
+  otp,
+}: SendAccountReactivationEmailInput) {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error("SMTP config is not set");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+
+  const info = await transporter.sendMail({
+    from: `Memoraa <${fromAddress}>`,
+    to,
+    subject: "Reactivate your Memoraa account",
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <h2>Reactivate your Memoraa account</h2>
+        <p>Use this code to reactivate your account:</p>
+        <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;">${otp}</p>
+        <p>This code expires in 10 minutes.</p>
+      </div>
+    `,
+  });
+
+  return { messageId: info.messageId };
+}
+
+export async function sendTwoFactorEmail({ to, otp }: SendTwoFactorEmailInput) {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error("SMTP config is not set");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+
+  const info = await transporter.sendMail({
+    from: `Memoraa <${fromAddress}>`,
+    to,
+    subject: "Confirm two-factor authentication for Memoraa",
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <h2>Confirm two-factor authentication</h2>
+        <p>Use this code to enable two-factor authentication on your Memoraa account:</p>
+        <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;">${otp}</p>
+        <p>This code expires in 10 minutes.</p>
+      </div>
+    `,
+  });
+
+  return { messageId: info.messageId };
+}
+
+export async function sendVerificationEmail({
+  to,
+  otp,
+}: SendVerificationEmailInput) {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    console.info("Email delivery skipped: SMTP env vars not configured.");
+    return {
+      skipped: true,
+      message: "Email delivery skipped because SMTP config is not set.",
+    };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+
+  const info = await transporter.sendMail({
+    from: `Memoraa <${fromAddress}>`,
+    to,
+    subject: "Verify your email for Memoraa",
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <h2>Welcome to Memoraa!</h2>
+        <p>Your verification code is:</p>
+        <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;">${otp}</p>
+        <p>This code expires in 10 minutes.</p>
+      </div>
+    `,
+  });
+
+  return { skipped: false, messageId: info.messageId };
+}
 
 export async function sendAlbumInvitationEmail({
   to,

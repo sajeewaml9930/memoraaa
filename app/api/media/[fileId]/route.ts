@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return album.userId === userId || album.sharedAlbums.some((sharedUser) => sharedUser.userId === userId);
     });
 
-    if (!isOwner && !hasAlbumAccess && memory.isStory !== true) {
+    if (!isOwner && !hasAlbumAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

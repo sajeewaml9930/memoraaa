@@ -29,7 +29,17 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await prisma.sharedAlbum.delete({ where: { id: invite.id } });
+    await prisma.$transaction([
+      prisma.sharedAlbum.delete({ where: { id: invite.id } }),
+      prisma.notification.updateMany({
+        where: {
+          userId,
+          type: "invite",
+          link: `/invite/${token}`,
+        },
+        data: { read: true },
+      }),
+    ]);
 
     return NextResponse.json({ success: true, message: "Invitation rejected" });
   } catch (error) {

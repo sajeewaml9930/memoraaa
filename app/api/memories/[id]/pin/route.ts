@@ -18,25 +18,17 @@ async function getMemoryWithPermission(memoryId: number, userId: number) {
 
   const isOwner = memory.userId === userId;
   const albumIds = memory.albums.map((albumMemory) => albumMemory.albumId);
-  const sharedAlbumAccess = await prisma.sharedAlbum.findFirst({
-    where: {
-      albumId: { in: albumIds },
-      userId,
-      accepted: true,
-      permission: { in: ["edit", "admin"] },
-    },
-  });
 
   return {
     memory,
-    allowed: isOwner || Boolean(sharedAlbumAccess),
+    allowed: isOwner,
     albumIds,
   };
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -64,7 +56,10 @@ export async function POST(
       nextPinned = undefined;
     }
 
-    const { memory, allowed, albumIds } = await getMemoryWithPermission(memoryId, userId);
+    const { memory, allowed, albumIds } = await getMemoryWithPermission(
+      memoryId,
+      userId,
+    );
 
     if (!memory) {
       return NextResponse.json({ error: "Memory not found" }, { status: 404 });
@@ -74,7 +69,8 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const resolvedPinned = nextPinned === undefined ? !memory.isPinned : nextPinned;
+    const resolvedPinned =
+      nextPinned === undefined ? !memory.isPinned : nextPinned;
 
     const updatedMemory = await prisma.memory.update({
       where: { id: memoryId },
@@ -96,9 +92,15 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, data: updatedMemory }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: updatedMemory },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error toggling memory pin status:", error);
-    return NextResponse.json({ error: "Failed to toggle memory pin status" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to toggle memory pin status" },
+      { status: 500 },
+    );
   }
 }

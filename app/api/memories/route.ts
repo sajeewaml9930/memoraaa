@@ -7,6 +7,7 @@ import { ensureAlbumPermission } from "@/app/lib/permissions";
 import { ensureAlbumCover } from "@/app/lib/cover-generator";
 import { parseMentionUsers } from "@/app/lib/mentions";
 import { normalizeMood } from "@/app/lib/moods";
+import { emitToAlbum, emitToUser } from "@/app/lib/socket";
 
 export async function GET(request: NextRequest) {
   try {
@@ -128,6 +129,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const responseMemory = {
+      ...memory,
+      albumId: albumIdNumber,
+      encryptedContent: normalizedContent,
+    };
+
+    try {
+      emitToAlbum("new_memory", albumIdNumber, {
+        albumId: albumIdNumber,
+        memory: responseMemory,
+      });
+    } catch (error) {
+      console.error("Error emitting new memory:", { albumId: albumIdNumber, memoryId: memory.id, error });
+    }
+
     const validMentionedIds = [...new Set(
       parseMentionUsers(normalizedContent)
         .map((entry) => Number(entry.id))
@@ -172,6 +188,7 @@ export async function POST(request: NextRequest) {
           await prisma.notification.createMany({
             data: notificationEntries,
           });
+          notificationEntries.forEach(({ userId }) => emitToUser("notification", userId, { userId }));
         }
       }
     }
@@ -183,7 +200,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        data: memory,
+        data: responseMemory,
       },
       { status: 201 }
     );

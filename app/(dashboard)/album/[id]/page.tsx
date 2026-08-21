@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
 import ChatList from "../../components/ChatList";
 import LockAlbumModal from "../../components/LockAlbumModal";
 import MemoryStream from "../../components/MemoryStream";
-import AlbumShareButton from "../../components/AlbumShareButton";
+import AlbumInfoDrawer from "../../components/AlbumInfoDrawer";
 import { useAlbumLock } from "../../hooks/useAlbumLock";
 import type { Album } from "@/app/types";
 
@@ -13,10 +15,18 @@ export default function AlbumDetailPage() {
   const { id } = useParams();
   const albumId = id ? Number(id) : null;
   const { isUnlocked, unlockAlbum } = useAlbumLock();
+  const searchParams = useSearchParams();
   const [album, setAlbum] = useState<Album | null>(null);
   const [sessionUserId, setSessionUserId] = useState<number | null>(null);
   const [isLockedModalOpen, setIsLockedModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInfoDrawerOpen, setIsInfoDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("info") === "1") {
+      setIsInfoDrawerOpen(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!albumId) {
@@ -96,25 +106,39 @@ export default function AlbumDetailPage() {
   return (
     <>
       <ChatList />
-      <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+      <div className="flex min-w-0 flex-1 flex-col pb-0">
+        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
           <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-gradient-to-br from-blue-100 to-indigo-200">
-              {album?.coverPhoto ? (
-                <img
-                  src={`/${album.coverPhoto.replace(/^\/+/, "")}`}
-                  alt={album.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-gray-500">
-                  <span className="text-lg font-semibold">{album?.name?.charAt(0)?.toUpperCase() ?? "A"}</span>
-                </div>
-              )}
-            </div>
-            <div className="text-lg font-semibold text-gray-900">{album?.name ?? "Album"}</div>
+            <Link
+              href="/albums"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 md:hidden"
+              title="Back to chats"
+              aria-label="Back to chats"
+            >
+              <ArrowLeft size={20} />
+            </Link>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-3 rounded-xl p-1 text-left hover:bg-gray-50"
+              onClick={() => setIsInfoDrawerOpen(true)}
+              aria-label="Open album info"
+            >
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-indigo-200">
+                {album?.coverPhoto ? (
+                  <img
+                    src={`/api/album/cover/${album.id}`}
+                    alt={album.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-gray-500">
+                    <span className="text-lg font-semibold">{album?.name?.charAt(0)?.toUpperCase() ?? "A"}</span>
+                  </div>
+                )}
+              </div>
+              <span className="truncate text-lg font-semibold text-gray-900">{album?.name ?? "Album"}</span>
+            </button>
           </div>
-          <AlbumShareButton album={album} />
         </div>
         {isLoading ? (
         <div className="flex flex-1 items-center justify-center bg-gray-50">
@@ -153,7 +177,7 @@ export default function AlbumDetailPage() {
           </div>
         </div>
       ) : (
-        <MemoryStream />
+        <MemoryStream onAlbumHeaderClick={() => setIsInfoDrawerOpen(true)} />
       )}
       </div>
 
@@ -167,6 +191,14 @@ export default function AlbumDetailPage() {
             unlockAlbum(albumId, updatedAlbum.passcodeTimeout ?? 5);
           }
         }}
+      />
+      <AlbumInfoDrawer
+        album={album}
+        isOpen={isInfoDrawerOpen}
+        onClose={() => setIsInfoDrawerOpen(false)}
+        onOpenChange={setIsInfoDrawerOpen}
+        onAlbumUpdated={setAlbum}
+        onPasscodeLock={() => setIsLockedModalOpen(true)}
       />
     </>
   );

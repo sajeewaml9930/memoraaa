@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
 
 export type AlbumSortValue = "date-desc" | "date-asc" | "name-asc" | "name-desc";
 export type AlbumOwnerFilter = "all" | "owned" | "shared";
@@ -27,6 +27,13 @@ const typeOptions: Array<{ value: AlbumContentType; label: string }> = [
   { value: "audio", label: "Audio" },
 ];
 
+const sortLabels: Record<AlbumSortValue, string> = {
+  "date-desc": "Most recent",
+  "date-asc": "Oldest",
+  "name-asc": "Name A-Z",
+  "name-desc": "Name Z-A",
+};
+
 export default function AlbumListControls({
   sortValue,
   ownerFilter,
@@ -39,6 +46,8 @@ export default function AlbumListControls({
 }: AlbumListControlsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const controlsRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const firstFilterRef = useRef<HTMLSelectElement | null>(null);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -50,6 +59,7 @@ export default function AlbumListControls({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsOpen(false);
+        triggerRef.current?.focus();
       }
     };
 
@@ -62,28 +72,87 @@ export default function AlbumListControls({
     };
   }, []);
 
+  useEffect(() => {
+    if (isOpen) {
+      firstFilterRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  const activeFilters = [
+    sortValue !== "date-desc" ? sortLabels[sortValue] : null,
+    ownerFilter !== "all" ? (ownerFilter === "owned" ? "My albums" : "Shared with me") : null,
+    privacyFilter !== "all" ? (privacyFilter === "private" ? "Private" : "Shared") : null,
+    contentType !== "all"
+      ? typeOptions.find((option) => option.value === contentType)?.label ?? null
+      : null,
+  ].filter((value): value is string => Boolean(value));
+
+  const resetFilters = () => {
+    onSortChange("date-desc");
+    onOwnerFilterChange("all");
+    onPrivacyFilterChange("all");
+    onContentTypeChange("all");
+  };
+
   return (
     <div ref={controlsRef} className="relative z-20 border-b border-gray-200 bg-white p-3">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((value) => !value)}
         aria-expanded={isOpen}
         aria-controls="album-list-filters"
-        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+        className={`flex w-full items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+          activeFilters.length > 0
+            ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        }`}
       >
-        <SlidersHorizontal size={16} className="text-gray-500" />
-        <span>Sort & filter</span>
+        <SlidersHorizontal size={16} className={activeFilters.length > 0 ? "text-blue-600" : "text-gray-500"} />
+        <span className="min-w-0 flex-1">
+          <span className="block">Sort & filter</span>
+          {activeFilters.length > 0 && (
+            <span className="block truncate text-xs font-normal text-blue-600">
+              {activeFilters.join(" · ")}
+            </span>
+          )}
+        </span>
+        {activeFilters.length > 0 && (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-semibold text-white">
+            {activeFilters.length}
+          </span>
+        )}
+        <ChevronDown size={16} className={`shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
-      {isOpen && (
-        <div
-          id="album-list-filters"
-          className="absolute left-3 right-3 top-full mt-2 space-y-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
-        >
+      <div
+        id="album-list-filters"
+        aria-hidden={!isOpen}
+        className={`absolute left-3 right-3 top-full mt-2 space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-lg transition-all duration-200 ease-out ${
+          isOpen
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none -translate-y-2 opacity-0"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-800">Filter albums</p>
+          {activeFilters.length > 0 && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            >
+              <X size={13} />
+              Clear
+            </button>
+          )}
+        </div>
+
           <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
           Sort
           <select
+            ref={firstFilterRef}
             value={sortValue}
             onChange={(event) => onSortChange(event.target.value as AlbumSortValue)}
             className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -153,7 +222,6 @@ export default function AlbumListControls({
         </div>
           </div>
         </div>
-      )}
     </div>
   );
 }

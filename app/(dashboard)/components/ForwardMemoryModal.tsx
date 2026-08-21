@@ -94,8 +94,7 @@ export default function ForwardMemoryModal({ memoryId, isOpen, onClose, onSucces
               >
                 <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-gray-100">
                   {album.coverPhoto ? (
-                    // coverPhoto is stored as a path
-                    <img src={album.coverPhoto.startsWith("/") ? album.coverPhoto : `/api/media/${encodeURIComponent(album.coverPhoto)}`} alt={album.name} className="h-full w-full object-cover"/>
+                    <img src={`/api/album/cover/${album.id}`} alt={album.name} className="h-full w-full object-cover"/>
                   ) : (
                     <div className="flex h-full items-center justify-center text-xs text-gray-500">No cover</div>
                   )}

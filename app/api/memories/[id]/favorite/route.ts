@@ -18,6 +18,13 @@ async function getMemoryWithPermission(memoryId: number, userId: number) {
 
   const isOwner = memory.userId === userId;
   const albumIds = memory.albums.map((albumMemory) => albumMemory.albumId);
+  const ownedAlbumAccess = await prisma.album.findFirst({
+    where: {
+      id: { in: albumIds },
+      userId,
+    },
+    select: { id: true },
+  });
   const sharedAlbumAccess = await prisma.sharedAlbum.findFirst({
     where: {
       albumId: { in: albumIds },
@@ -29,13 +36,13 @@ async function getMemoryWithPermission(memoryId: number, userId: number) {
 
   return {
     memory,
-    allowed: isOwner || Boolean(sharedAlbumAccess),
+    allowed: isOwner || Boolean(ownedAlbumAccess) || Boolean(sharedAlbumAccess),
   };
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -78,9 +85,15 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, data: updatedMemory }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: updatedMemory },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Error toggling favorite memory:", error);
-    return NextResponse.json({ error: "Failed to toggle favorite memory" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to toggle favorite memory" },
+      { status: 500 },
+    );
   }
 }

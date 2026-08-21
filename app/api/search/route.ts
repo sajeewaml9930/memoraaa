@@ -121,7 +121,6 @@ export async function GET(request: NextRequest) {
 
     const memoryWhere: Prisma.MemoryWhereInput = {
       isArchived: false,
-      isStory: false,
       ...(normalizedTypes.length > 0 ? { memoryType: { in: normalizedTypes } } : {}),
       ...(moodParam ? { mood: { equals: moodParam } } : {}),
       ...(tagIdsParam.length > 0 ? { tags: { some: { tagId: { in: tagIdsParam } } } } : {}),
@@ -225,7 +224,6 @@ export async function GET(request: NextRequest) {
           status: memory.status,
           isFavorite: memory.isFavorite,
           isPinned: memory.isPinned,
-          isStory: memory.isStory,
         };
       })
       .filter((memory): memory is NonNullable<typeof memory> => Boolean(memory));

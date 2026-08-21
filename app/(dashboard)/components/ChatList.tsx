@@ -2,25 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, Plus, MoreVertical, Pin, Image as ImageIcon } from "lucide-react";
+import { Plus, MoreVertical, Pin, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import EditAlbumModal from "./EditAlbumModal";
 import LockAlbumModal from "./LockAlbumModal";
 import CopyAlbumModal from "./CopyAlbumModal";
-import AlbumListControls, {
-  type AlbumContentType,
-  type AlbumOwnerFilter,
-  type AlbumPrivacyFilter,
-  type AlbumSortValue,
-} from "./AlbumListControls";
+import SearchBar from "./SearchBar";
 import type { Album } from "@/app/types";
 
 export default function ChatList() {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [sortValue, setSortValue] = useState<AlbumSortValue>("date-desc");
-  const [ownerFilter, setOwnerFilter] = useState<AlbumOwnerFilter>("all");
-  const [privacyFilter, setPrivacyFilter] = useState<AlbumPrivacyFilter>("all");
-  const [contentType, setContentType] = useState<AlbumContentType>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [showNewAlbum, setShowNewAlbum] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
@@ -37,10 +28,7 @@ export default function ChatList() {
   const fetchAlbums = useCallback(async () => {
     try {
       const params = new URLSearchParams({
-        sort: sortValue,
-        filterOwner: ownerFilter,
-        filterPrivate: privacyFilter,
-        filterType: contentType,
+        sort: "date-desc",
       });
 
       const response = await fetch(`/api/albums?${params.toString()}`);
@@ -51,10 +39,20 @@ export default function ChatList() {
     } finally {
       setIsLoading(false);
     }
-  }, [contentType, ownerFilter, privacyFilter, sortValue]);
+  }, []);
 
   useEffect(() => {
-    fetchAlbums();
+    const initialLoad = window.setTimeout(() => void fetchAlbums(), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [fetchAlbums]);
+
+  useEffect(() => {
+    const handleAlbumsChanged = () => {
+      void fetchAlbums();
+    };
+
+    window.addEventListener("memoraa:albums-changed", handleAlbumsChanged);
+    return () => window.removeEventListener("memoraa:albums-changed", handleAlbumsChanged);
   }, [fetchAlbums]);
 
   const handleCreateAlbum = async (e: React.FormEvent) => {
@@ -274,11 +272,11 @@ export default function ChatList() {
   };
 
   return (
-    <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
+    <div className={`flex w-full shrink-0 flex-col border-r border-gray-200 bg-white md:w-80 ${pathname.startsWith("/album/") ? "hidden md:flex" : ""}`}>
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">Chats</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Albums</h1>
           <button
             onClick={() => setShowNewAlbum(true)}
             className="rounded-full bg-blue-100 p-2 text-blue-600 hover:bg-blue-200"
@@ -288,13 +286,7 @@ export default function ChatList() {
           </button>
         </div>
 
-        <Link
-          href="/search"
-          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-        >
-          <Search size={16} />
-          Search memories
-        </Link>
+        <SearchBar />
       </div>
 
       {/* New Album Form */}
@@ -328,19 +320,8 @@ export default function ChatList() {
         </div>
       )}
 
-      <AlbumListControls
-        sortValue={sortValue}
-        ownerFilter={ownerFilter}
-        privacyFilter={privacyFilter}
-        contentType={contentType}
-        onSortChange={setSortValue}
-        onOwnerFilterChange={setOwnerFilter}
-        onPrivacyFilterChange={setPrivacyFilter}
-        onContentTypeChange={setContentType}
-      />
-
       {/* Albums List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-24">
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
             <p className="text-gray-500">Loading albums...</p>
@@ -372,7 +353,7 @@ export default function ChatList() {
                       <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-blue-100 to-indigo-200">
                         {album.coverPhoto ? (
                           <img
-                            src={`/${album.coverPhoto.replace(/^\/+/, "")}`}
+                            src={`/api/album/cover/${album.id}`}
                             alt={album.name}
                             className="h-full w-full object-cover"
                           />
@@ -428,6 +409,18 @@ export default function ChatList() {
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setContextMenuOpen(null);
+                        router.push(`/album/${album.id}?info=1`);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Info
                     </button>
                     <button
                       type="button"

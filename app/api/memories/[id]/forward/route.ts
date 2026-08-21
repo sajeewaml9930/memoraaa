@@ -92,8 +92,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         isFavorite: false,
         isPinned: false,
         isArchived: false,
-        isStory: false,
-        expiresAt: null,
         viewCount: 0,
         memoryDate: memory.memoryDate,
         userId,

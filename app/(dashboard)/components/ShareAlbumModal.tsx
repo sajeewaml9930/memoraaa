@@ -11,6 +11,13 @@ interface CollaboratorEntry {
   permission: "view" | "add" | "edit" | "admin";
 }
 
+interface PendingInvite {
+  id: number;
+  permission: string;
+  token?: string | null;
+  user?: { email?: string | null; fullName?: string | null };
+}
+
 interface ShareAlbumModalProps {
   isOpen: boolean;
   album: Album | null;
@@ -29,7 +36,7 @@ export default function ShareAlbumModal({ isOpen, album, onClose }: ShareAlbumMo
   const [email, setEmail] = useState("");
   const [permission, setPermission] = useState<(typeof permissionOptions)[number]["value"]>("view");
   const [collaborators, setCollaborators] = useState<CollaboratorEntry[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCopying, setIsCopying] = useState<number | null>(null);
@@ -91,7 +98,10 @@ export default function ShareAlbumModal({ isOpen, album, onClose }: ShareAlbumMo
       const inviteData = await inviteResponse.json().catch(() => ({}));
       setPendingInvites(inviteData?.data ?? []);
       if (data?.data?.inviteUrl) {
-        window.alert(`Invite sent. Share this link: ${data.data.inviteUrl}`);
+        const emailMessage = data?.data?.email?.sent
+          ? "The invitation email was sent."
+          : "The invitation was saved, but the email was not sent. Use this link instead.";
+        window.alert(`${emailMessage} Share this link: ${data.data.inviteUrl}`);
       }
     } catch (error) {
       console.error("Error inviting collaborator:", error);

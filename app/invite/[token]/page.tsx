@@ -65,7 +65,7 @@ export default function InvitePage() {
       }
 
       setSuccess("Invitation accepted. You can now access the album.");
-      setTimeout(() => router.push("/chats"), 1200);
+      setTimeout(() => router.push("/albums"), 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to accept invitation.");
     } finally {
@@ -89,7 +89,7 @@ export default function InvitePage() {
       }
 
       setSuccess("Invitation rejected.");
-      setTimeout(() => router.push("/chats"), 900);
+      setTimeout(() => router.push("/albums"), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reject invitation.");
     } finally {
