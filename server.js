@@ -1,14 +1,20 @@
 (async () => {
   const { createServer } = await import("node:http");
-  const { parse } = await import("node:url");
+  const { parse: parseQueryString } = await import("node:querystring");
   const next = await import("next");
   const { default: cron } = await import("node-cron");
   const { Server } = await import("socket.io");
 
   const port = Number.parseInt(process.env.PORT || "3000", 10);
   const dev = process.env.NODE_ENV !== "production";
+  const hostArgumentIndex = process.argv.findIndex(
+    (argument) => argument === "-H" || argument === "--hostname",
+  );
+  const cliHost =
+    hostArgumentIndex >= 0 ? process.argv[hostArgumentIndex + 1] : undefined;
   const bindHost = process.env.HOST || "0.0.0.0";
-  const publicHost = process.env.HOSTNAME || (dev ? "localhost" : "api.domain.org");
+  const publicHost =
+    process.env.HOSTNAME || cliHost || (dev ? "localhost" : "api.domain.org");
 
   const app = next.default({ dev, hostname: publicHost, port });
   const handle = app.getRequestHandler();
@@ -16,7 +22,14 @@
   await app.prepare();
 
   const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url || "/", true);
+    const requestUrl = new URL(
+      req.url || "/",
+      `http://${req.headers.host || "localhost"}`,
+    );
+    const parsedUrl = {
+      pathname: requestUrl.pathname,
+      query: parseQueryString(requestUrl.search.slice(1)),
+    };
     handle(req, res, parsedUrl);
   });
 
@@ -63,12 +76,14 @@
 
     socket.on("join_notifications", (userId) => {
       const normalizedUserId = Number(userId);
-      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0) socket.join(`notifications:${normalizedUserId}`);
+      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0)
+        socket.join(`notifications:${normalizedUserId}`);
     });
 
     socket.on("leave_notifications", (userId) => {
       const normalizedUserId = Number(userId);
-      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0) socket.leave(`notifications:${normalizedUserId}`);
+      if (Number.isFinite(normalizedUserId) && normalizedUserId > 0)
+        socket.leave(`notifications:${normalizedUserId}`);
     });
 
     socket.on("typing", (payload) => {
@@ -78,7 +93,10 @@
 
       const albumId = Number(payload.albumId);
       const userId = Number(payload.userId);
-      const userName = typeof payload.userName === "string" && payload.userName.trim() ? payload.userName.trim() : "Someone";
+      const userName =
+        typeof payload.userName === "string" && payload.userName.trim()
+          ? payload.userName.trim()
+          : "Someone";
 
       if (!Number.isFinite(albumId) || !Number.isFinite(userId)) {
         return;
@@ -129,7 +147,9 @@
   try {
     const reminderResult = await processReminderJobs();
     if (reminderResult.sentCount > 0) {
-      console.log(`Processed ${reminderResult.sentCount} reminder notifications.`);
+      console.log(
+        `Processed ${reminderResult.sentCount} reminder notifications.`,
+      );
     }
   } catch (error) {
     console.warn("Startup reminder job skipped:", error.message || error);
@@ -140,7 +160,9 @@
     try {
       const reminderResult = await processReminderJobs();
       if (reminderResult.sentCount > 0) {
-        console.log(`Processed ${reminderResult.sentCount} reminder notifications.`);
+        console.log(
+          `Processed ${reminderResult.sentCount} reminder notifications.`,
+        );
       }
       if (reminderResult.errors.length > 0) {
         console.warn("Reminder job errors:", reminderResult.errors);
@@ -154,7 +176,7 @@
     console.log(
       `> Server listening at http://${publicHost}:${port} as ${
         dev ? "development" : process.env.NODE_ENV || "production"
-      }`
+      }`,
     );
   });
 })().catch((error) => {

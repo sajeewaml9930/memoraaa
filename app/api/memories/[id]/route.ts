@@ -10,6 +10,11 @@ async function getMemoryWithPermission(memoryId: number, userId: number) {
     where: { id: memoryId },
     include: {
       albums: true,
+      user: {
+        select: {
+          encryptionKey: true,
+        },
+      },
     },
   });
 
@@ -112,19 +117,10 @@ export async function PATCH(
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { encryptionKey: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     const updatedMemory = await prisma.memory.update({
       where: { id: memoryId },
       data: {
-        encryptedContent: encrypt(content.trim(), user.encryptionKey),
+        encryptedContent: encrypt(content.trim(), memory.user.encryptionKey),
         memoryDate: memoryDate ? new Date(memoryDate) : memory.memoryDate,
         updatedAt: new Date(),
       },

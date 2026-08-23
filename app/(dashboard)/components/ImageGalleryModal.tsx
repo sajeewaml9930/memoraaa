@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import type { Memory } from "@/app/types";
+import { useMediaCache } from "@/app/hooks/useMediaCache";
 
 interface ImageGalleryModalProps {
   memories: Memory[];
@@ -17,6 +18,7 @@ export default function ImageGalleryModal({
 }: ImageGalleryModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const mediaCache = useMediaCache();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -29,7 +31,9 @@ export default function ImageGalleryModal({
       }
 
       if (event.key === "ArrowLeft") {
-        setCurrentIndex((value) => (value - 1 + memories.length) % memories.length);
+        setCurrentIndex(
+          (value) => (value - 1 + memories.length) % memories.length,
+        );
       }
     };
 
@@ -44,7 +48,8 @@ export default function ImageGalleryModal({
       return "";
     }
 
-    const filePath = currentMemory.encryptedFilePath || currentMemory.thumbnailPath || "";
+    const filePath =
+      currentMemory.encryptedFilePath || currentMemory.thumbnailPath || "";
     return filePath ? `/api/media/${encodeURIComponent(filePath)}` : "";
   }, [currentMemory]);
 
@@ -52,8 +57,10 @@ export default function ImageGalleryModal({
     return null;
   }
 
-  const goToPrevious = () => setCurrentIndex((value) => (value - 1 + memories.length) % memories.length);
-  const goToNext = () => setCurrentIndex((value) => (value + 1) % memories.length);
+  const goToPrevious = () =>
+    setCurrentIndex((value) => (value - 1 + memories.length) % memories.length);
+  const goToNext = () =>
+    setCurrentIndex((value) => (value + 1) % memories.length);
 
   return (
     <div
@@ -63,7 +70,9 @@ export default function ImageGalleryModal({
       <div
         className="relative flex h-full w-full max-h-[90vh] max-w-5xl items-center justify-center rounded-2xl bg-black"
         onClick={(event) => event.stopPropagation()}
-        onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+        onTouchStart={(event) =>
+          setTouchStartX(event.touches[0]?.clientX ?? null)
+        }
         onTouchEnd={(event) => {
           if (touchStartX == null) {
             return;
@@ -113,6 +122,7 @@ export default function ImageGalleryModal({
         <img
           src={imageSrc}
           alt="Memory gallery"
+          onLoad={() => void mediaCache.cacheMedia(imageSrc)}
           className="max-h-[90vh] max-w-full object-contain"
         />
 

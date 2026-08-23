@@ -3,17 +3,43 @@ import os from "os";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 
-function resolveStaticBinaryPath(packageName: string, executableName: string): string {
-  const envVarName = packageName.includes("ffmpeg") ? "FFMPEG_PATH" : "FFPROBE_PATH";
+function resolveStaticBinaryPath(
+  packageName: string,
+  executableName: string,
+): string {
+  const envVarName = packageName.includes("ffmpeg")
+    ? "FFMPEG_PATH"
+    : "FFPROBE_PATH";
   const envOverride = process.env[envVarName];
   if (envOverride && fs.existsSync(envOverride)) {
     return envOverride;
   }
 
   const candidates = [
-    path.resolve(process.cwd(), "node_modules", packageName, "bin", process.platform, process.arch, process.platform === "win32" ? `${executableName}.exe` : executableName),
-    path.resolve(process.cwd(), "node_modules", packageName, "bin", process.platform, process.arch.toString(), process.platform === "win32" ? `${executableName}.exe` : executableName),
-    path.resolve(process.cwd(), "node_modules", packageName, process.platform === "win32" ? `${executableName}.exe` : executableName),
+    path.resolve(
+      process.cwd(),
+      "node_modules",
+      packageName,
+      "bin",
+      process.platform,
+      process.arch,
+      process.platform === "win32" ? `${executableName}.exe` : executableName,
+    ),
+    path.resolve(
+      process.cwd(),
+      "node_modules",
+      packageName,
+      "bin",
+      process.platform,
+      process.arch.toString(),
+      process.platform === "win32" ? `${executableName}.exe` : executableName,
+    ),
+    path.resolve(
+      process.cwd(),
+      "node_modules",
+      packageName,
+      process.platform === "win32" ? `${executableName}.exe` : executableName,
+    ),
   ];
 
   const resolved = candidates.find((candidate) => fs.existsSync(candidate));
@@ -31,11 +57,16 @@ ffmpeg.setFfmpegPath(ffmpegBinaryPath);
 ffmpeg.setFfprobePath(ffprobeBinaryPath);
 
 function getTempFilePath(extension: string): string {
-  return path.join(os.tmpdir(), `memoraa-video-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`);
+  return path.join(
+    os.tmpdir(),
+    `memoraa-video-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`,
+  );
 }
 
 function formatSeconds(seconds: number): string {
-  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+  const safeSeconds = Number.isFinite(seconds)
+    ? Math.max(0, Math.round(seconds))
+    : 0;
   const minutes = Math.floor(safeSeconds / 60);
   const remainingSeconds = safeSeconds % 60;
   return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
@@ -54,7 +85,9 @@ export async function getVideoDuration(inputBuffer: Buffer): Promise<number> {
           return;
         }
 
-        const duration = Number(metadata?.format?.duration ?? metadata?.streams?.[0]?.duration ?? 0);
+        const duration = Number(
+          metadata?.format?.duration ?? metadata?.streams?.[0]?.duration ?? 0,
+        );
         resolve(Number.isFinite(duration) ? duration : 0);
       });
     });
@@ -73,7 +106,7 @@ export async function compressVideo(
     maxWidth?: number;
     maxHeight?: number;
     bitrate?: string;
-  }
+  },
 ): Promise<Buffer> {
   const inputPath = getTempFilePath(".input.mp4");
   const outputPath = getTempFilePath(".output.mp4");
@@ -83,7 +116,9 @@ export async function compressVideo(
 
     const duration = await getVideoDuration(inputBuffer);
     const trimmedStart = Math.max(0, Number(options?.startTime ?? 0));
-    const trimmedEnd = Number.isFinite(options?.endTime) ? Number(options?.endTime) : duration;
+    const trimmedEnd = Number.isFinite(options?.endTime)
+      ? Number(options?.endTime)
+      : duration;
     const effectiveDuration = Math.max(0, trimmedEnd - trimmedStart);
 
     await new Promise<void>((resolve, reject) => {
@@ -93,19 +128,26 @@ export async function compressVideo(
         .audioCodec("aac")
         .format("mp4")
         .outputOptions([
-          "-preset fast",
-          "-crf 28",
+          "-preset slow",
+          "-crf 18",
           "-pix_fmt yuv420p",
-          `-b:v ${options?.bitrate ?? "1500k"}`,
           "-max_muxing_queue_size 9999",
         ]);
 
+      if (options?.bitrate) {
+        command.outputOptions([`-b:v ${options.bitrate}`]);
+      }
+
       if (options?.maxWidth || options?.maxHeight) {
-        command.size(`${options?.maxWidth ?? 1280}x${options?.maxHeight ?? 720}`);
+        command.size(
+          `${options?.maxWidth ?? 1280}x${options?.maxHeight ?? 720}`,
+        );
       }
 
       if (effectiveDuration > 0) {
-        command.duration(Math.min(effectiveDuration, duration || effectiveDuration));
+        command.duration(
+          Math.min(effectiveDuration, duration || effectiveDuration),
+        );
       }
 
       command
@@ -129,7 +171,7 @@ export async function compressVideo(
 
 export async function extractVideoThumbnail(
   inputBuffer: Buffer,
-  timeSeconds?: number
+  timeSeconds?: number,
 ): Promise<Buffer> {
   const inputPath = getTempFilePath(".input.mp4");
   const outputPath = getTempFilePath(".thumb.jpg");
@@ -140,7 +182,10 @@ export async function extractVideoThumbnail(
     const targetTime =
       Number.isFinite(timeSeconds) && timeSeconds !== undefined
         ? Math.min(Math.max(0, timeSeconds), Math.max(0, duration || 0))
-        : Math.min(Math.max(duration > 0 ? duration * 0.1 : 1, 1), duration || 1);
+        : Math.min(
+            Math.max(duration > 0 ? duration * 0.1 : 1, 1),
+            duration || 1,
+          );
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)

@@ -9,6 +9,7 @@ import LockAlbumModal from "./LockAlbumModal";
 import CopyAlbumModal from "./CopyAlbumModal";
 import SearchBar from "./SearchBar";
 import type { Album } from "@/app/types";
+import { useCache } from "@/app/hooks/useCache";
 
 export default function ChatList() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -24,8 +25,14 @@ export default function ChatList() {
   const [contextMenuOpen, setContextMenuOpen] = useState<number | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const cache = useCache();
 
   const fetchAlbums = useCallback(async () => {
+    const cachedAlbums = await cache.getAlbums();
+    if (cachedAlbums.length > 0) {
+      setAlbums(cachedAlbums);
+      setIsLoading(false);
+    }
     try {
       const params = new URLSearchParams({
         sort: "date-desc",
@@ -33,13 +40,15 @@ export default function ChatList() {
 
       const response = await fetch(`/api/albums?${params.toString()}`);
       const data = await response.json();
-      setAlbums(data.data || []);
+      const freshAlbums = Array.isArray(data.data) ? data.data : [];
+      setAlbums(freshAlbums);
+      await cache.saveAlbums(freshAlbums);
     } catch (error) {
       console.error("Error fetching albums:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [cache]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void fetchAlbums(), 0);

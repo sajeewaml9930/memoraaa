@@ -48,6 +48,7 @@ import { ProfileAvatar } from "../components/ProfileAvatar";
 import { TwoFactorToggle } from "../components/TwoFactorToggle";
 import { ModeToggle } from "@/app/components/mode-toggle";
 import { WallpaperSettings } from "./components/WallpaperSettings";
+import { clearCache } from "@/app/lib/cache";
 
 type CategoryId =
   | "profile"
@@ -191,6 +192,7 @@ export default function SettingsPage() {
   const [savingReminders, setSavingReminders] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -332,6 +334,17 @@ export default function SettingsPage() {
       );
     } finally {
       setSavingReminders(false);
+    }
+  };
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    try {
+      await clearCache();
+      setNotice("Local cache cleared.");
+    } catch {
+      setError("Unable to clear local cache.");
+    } finally {
+      setClearingCache(false);
     }
   };
 
@@ -483,6 +496,21 @@ export default function SettingsPage() {
           disabled
         >
           <PlannedBadge />
+        </SettingRow>
+        <SettingRow
+          icon={FolderArchive}
+          title="Clear local cache"
+          description="Remove cached memories and viewed media from this browser"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleClearCache()}
+            disabled={clearingCache}
+          >
+            {clearingCache ? "Clearing..." : "Clear cache"}
+          </Button>
         </SettingRow>
       </CardContent>
     </Card>

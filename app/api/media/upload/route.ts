@@ -228,13 +228,21 @@ export async function POST(request: NextRequest) {
         Number.isFinite(endTime) && endTime > effectiveStart
           ? endTime
           : undefined;
-      processedBuffer = (await compressVideo(fileBuffer, {
-        startTime: effectiveStart,
-        endTime: effectiveEnd,
-        maxWidth: 1280,
-        maxHeight: 720,
-      })) as Buffer;
-      duration = Math.round(await getVideoDuration(processedBuffer));
+      const originalDuration = await getVideoDuration(fileBuffer);
+      const isTrimmed =
+        effectiveStart > 0 ||
+        (effectiveEnd !== undefined && effectiveEnd < originalDuration);
+
+      if (isTrimmed) {
+        processedBuffer = await compressVideo(fileBuffer, {
+          startTime: effectiveStart,
+          endTime: effectiveEnd,
+        });
+      }
+
+      duration = Math.round(
+        isTrimmed ? await getVideoDuration(processedBuffer) : originalDuration,
+      );
       thumbnailBuffer = await extractVideoThumbnail(
         processedBuffer,
         Math.min(duration > 0 ? duration / 2 : 1, duration || 1),

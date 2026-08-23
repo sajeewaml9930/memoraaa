@@ -15,10 +15,11 @@ import {
   Archive,
   ArchiveRestore,
   Info,
+  PlayCircle,
 } from "lucide-react";
 import EditMemoryModal from "./EditMemoryModal";
 import ForwardMemoryModal from "./ForwardMemoryModal";
-import ImageGalleryModal from "./ImageGalleryModal";
+import MediaViewer from "./MediaViewer";
 import PhotoCaptionModal from "./PhotoCaptionModal";
 import VideoTrimmerModal from "./VideoTrimmerModal";
 import AudioRecorderModal from "./AudioRecorderModal";
@@ -31,6 +32,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSocket } from "@/app/hooks/useSocket";
+import { useCache } from "@/app/hooks/useCache";
+import { useMediaCache } from "@/app/hooks/useMediaCache";
 import { renderMentionSegments, serializeMention } from "@/app/lib/mentions";
 import { MOOD_META, normalizeMood } from "@/app/lib/moods";
 import type { Memory, MemoryReactionRecord } from "@/app/types";
@@ -41,12 +44,15 @@ export default function MemoryStream({
   const { id: albumId } = useParams();
   const parsedAlbumId = albumId ? Number(albumId) : null;
   const socket = useSocket(parsedAlbumId);
+  const cache = useCache();
+  const mediaCache = useMediaCache();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -57,7 +63,7 @@ export default function MemoryStream({
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
-  const [galleryMemoryId, setGalleryMemoryId] = useState<number | null>(null);
+  const [viewerMemoryId, setViewerMemoryId] = useState<number | null>(null);
   const [forwardMemoryId, setForwardMemoryId] = useState<number | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const [pendingVideo, setPendingVideo] = useState<File | null>(null);
@@ -150,39 +156,68 @@ export default function MemoryStream({
   }, []);
 
   const fetchMemories = useCallback(async () => {
-    if (!albumId) {
+    if (!parsedAlbumId) {
       return;
+    }
+
+    const cachedMemories = await cache.getMessages(parsedAlbumId);
+    if (cachedMemories.length > 0) {
+      setMemories(sortMemories(cachedMemories));
+      setIsLoading(false);
     }
 
     try {
-      const response = await fetch(`/api/albums/${albumId}/memories`);
+      const response = await fetch(`/api/albums/${parsedAlbumId}/memories`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch memories: ${response.status}`);
+      }
       const data = await response.json();
-      setMemories(sortMemories(data.data || []));
+      const freshMemories = (
+        Array.isArray(data.data) ? data.data : []
+      ) as Memory[];
+      setMemories(sortMemories(freshMemories));
+      await cache.replaceMessages(parsedAlbumId, freshMemories);
+      await cache.saveUsers(
+        freshMemories.flatMap((memory) =>
+          memory.sender ? [memory.sender] : [],
+        ),
+      );
+      setIsOffline(false);
     } catch (error) {
       console.error("Error fetching memories:", error);
+      setIsOffline(true);
     } finally {
       setIsLoading(false);
     }
-  }, [albumId]);
+  }, [cache, parsedAlbumId, sortMemories]);
 
   useEffect(() => {
-    if (!albumId) {
+    if (!albumId || !parsedAlbumId) {
       return;
     }
 
-    fetchMemories();
+    queueMicrotask(() => void fetchMemories());
 
     fetch(`/api/albums/${albumId}/collaborators`)
       .then((response) => response.json())
       .then((data) => {
         const nextOptions = Array.isArray(data?.data) ? data.data : [];
         setMentionSuggestions(nextOptions);
+        void cache.saveCollaborators(parsedAlbumId, nextOptions);
       })
-      .catch(() => setMentionSuggestions([]));
+      .catch(async () => {
+        const cached = await cache.getCollaborators(parsedAlbumId);
+        setMentionSuggestions(cached);
+      });
 
     fetch(`/api/albums/${albumId}`)
       .then((response) => response.json())
       .then((data) => {
+        if (data?.data) {
+          void cache.saveAlbum(data.data);
+        }
         const permission = data?.data?.permission ?? data?.permission;
         const role = data?.data?.role ?? data?.role;
         setCanEditMemories(
@@ -190,7 +225,18 @@ export default function MemoryStream({
         );
       })
       .catch(() => setCanEditMemories(false));
-  }, [albumId, fetchMemories]);
+  }, [albumId, cache, fetchMemories, parsedAlbumId]);
+
+  useEffect(() => {
+    const updateConnection = () => setIsOffline(!navigator.onLine);
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -334,6 +380,7 @@ export default function MemoryStream({
           ),
         ),
       );
+      void cache.saveMessage(parsedAlbumId, nextMemory);
     };
 
     const handleMemoryDeleted = (payload: {
@@ -347,6 +394,9 @@ export default function MemoryStream({
       setMemories((currentMemories) =>
         currentMemories.filter((memory) => memory.id !== payload.memoryId),
       );
+      if (payload.memoryId) {
+        void cache.removeMessage(parsedAlbumId, payload.memoryId);
+      }
     };
 
     const handleNewMemory = (payload: {
@@ -366,6 +416,7 @@ export default function MemoryStream({
 
         return sortMemories([payload.memory!, ...currentMemories]);
       });
+      void cache.saveMessage(parsedAlbumId, payload.memory);
       void fetchMemories();
     };
 
@@ -385,6 +436,7 @@ export default function MemoryStream({
           ),
         ),
       );
+      void cache.saveMessage(parsedAlbumId, nextMemory);
     };
 
     const handleReactionUpdated = (payload: {
@@ -406,6 +458,15 @@ export default function MemoryStream({
             : memory,
         ),
       );
+      const updatedMemory = memories.find(
+        (memory) => memory.id === payload.memoryId,
+      );
+      if (updatedMemory) {
+        void cache.saveMessage(parsedAlbumId, {
+          ...updatedMemory,
+          reactions: payload.reactions ?? [],
+        });
+      }
     };
 
     socket.on("new_memory", handleNewMemory);
@@ -421,7 +482,7 @@ export default function MemoryStream({
       socket.off("memory_deleted", handleMemoryDeleted);
       socket.off("reaction_updated", handleReactionUpdated);
     };
-  }, [socket, parsedAlbumId, sortMemories, fetchMemories]);
+  }, [cache, fetchMemories, memories, parsedAlbumId, socket, sortMemories]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -541,6 +602,35 @@ export default function MemoryStream({
     stopTyping();
 
     setIsSending(true);
+    const optimisticMemoryId = -Date.now();
+    const optimisticMemory: Memory = {
+      id: optimisticMemoryId,
+      albumId: parsedAlbumId,
+      memoryType: "text",
+      encryptedContent: messageText,
+      isFavorite: false,
+      isPinned: false,
+      isArchived: false,
+      viewCount: 0,
+      memoryDate: new Date(),
+      userId: currentUser?.id ?? 0,
+      status: "ready",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      sender: currentUser?.name
+        ? {
+            id: currentUser.id ?? 0,
+            username: currentUser.name,
+            fullName: currentUser.name,
+          }
+        : undefined,
+    };
+    setMemories((currentMemories) =>
+      sortMemories([...currentMemories, optimisticMemory]),
+    );
+    if (parsedAlbumId) {
+      void cache.saveMessage(parsedAlbumId, optimisticMemory);
+    }
 
     try {
       // POST to album-scoped memories endpoint. Use parsedAlbumId to ensure a numeric id is sent.
@@ -575,6 +665,12 @@ export default function MemoryStream({
       await fetchMemories();
     } catch (error) {
       console.error("Error sending message:", error);
+      setMemories((currentMemories) =>
+        currentMemories.filter((memory) => memory.id !== optimisticMemoryId),
+      );
+      if (parsedAlbumId) {
+        void cache.removeMessage(parsedAlbumId, optimisticMemoryId);
+      }
       if (error instanceof Error) {
         window.alert(`Failed to send message: ${error.message}`);
       } else {
@@ -1139,8 +1235,8 @@ export default function MemoryStream({
     );
   }
 
-  const photoMemories = memories.filter(
-    (memory) => memory.memoryType === "photo",
+  const mediaMemories = memories.filter(
+    (memory) => memory.memoryType === "photo" || memory.memoryType === "video",
   );
   const sortedMemories = sortMemories(memories);
   const filteredMemories = sortedMemories.filter((memory) => {
@@ -1191,6 +1287,11 @@ export default function MemoryStream({
       style={wallpaperStyle}
       data-chat-theme-chat-background={wallpaper?.wallpaperType ?? "default"}
     >
+      {isOffline && memories.length > 0 && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800">
+          You are offline. Viewing cached memories.
+        </div>
+      )}
       <div
         ref={scrollRef}
         className="scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto p-4 space-y-4"
@@ -1286,17 +1387,13 @@ export default function MemoryStream({
                             : "border-gray-200 bg-white text-gray-900 shadow-sm";
 
                           const imageSrc =
-                            (memory.memoryType === "photo" ||
-                              memory.memoryType === "video") &&
+                            memory.memoryType === "photo" &&
                             (memory.thumbnailPath || memory.encryptedFilePath)
                               ? `/api/media/${encodeURIComponent(memory.thumbnailPath || memory.encryptedFilePath || "")}`
-                              : "";
-
-                          const videoSrc =
-                            memory.memoryType === "video" &&
-                            memory.encryptedFilePath
-                              ? `/api/media/${encodeURIComponent(memory.encryptedFilePath)}`
-                              : "";
+                              : memory.memoryType === "video" &&
+                                  memory.thumbnailPath
+                                ? `/api/media/${encodeURIComponent(memory.thumbnailPath)}`
+                                : "";
 
                           const audioSrc =
                             (memory.memoryType === "voice" ||
@@ -1328,6 +1425,7 @@ export default function MemoryStream({
                           return (
                             <div
                               key={memory.id}
+                              id={`memory-${memory.id}`}
                               className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                             >
                               <div
@@ -1360,7 +1458,7 @@ export default function MemoryStream({
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        setGalleryMemoryId(memory.id)
+                                        setViewerMemoryId(memory.id)
                                       }
                                       className="block w-full text-left"
                                       aria-label="Open photo gallery"
@@ -1369,6 +1467,10 @@ export default function MemoryStream({
                                         <img
                                           src={imageSrc}
                                           alt="Uploaded memory"
+                                          loading="lazy"
+                                          onLoad={() =>
+                                            void mediaCache.cacheMedia(imageSrc)
+                                          }
                                           className="h-auto max-h-[600px] w-[240px] max-w-full object-contain"
                                         />
                                       ) : (
@@ -1422,28 +1524,39 @@ export default function MemoryStream({
                                     <div className="px-3 pt-2">
                                       {incomingSender}
                                     </div>
-                                    <div className="relative">
-                                      {videoSrc ? (
-                                        <video
-                                          src={videoSrc}
-                                          controls
-                                          poster={imageSrc}
-                                          className="h-auto max-h-[600px] w-[240px] max-w-full bg-black object-contain"
+                                    {imageSrc ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewerMemoryId(memory.id)
+                                        }
+                                        className="relative block w-full cursor-pointer bg-black text-left"
+                                        aria-label="Open video viewer"
+                                      >
+                                        <img
+                                          src={imageSrc}
+                                          alt="Video thumbnail"
+                                          loading="lazy"
+                                          onLoad={() =>
+                                            memory.thumbnailPath
+                                              ? void mediaCache.cacheThumbnail(
+                                                  imageSrc,
+                                                )
+                                              : undefined
+                                          }
+                                          className="h-auto max-h-[600px] w-[240px] max-w-full object-contain"
                                         />
-                                      ) : (
-                                        <div className="flex h-64 w-[240px] max-w-full items-center justify-center bg-gray-100 text-sm text-gray-500">
-                                          Video unavailable
-                                        </div>
-                                      )}
-                                      {typeof memory.duration === "number" &&
-                                        memory.duration > 0 && (
-                                          <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
-                                            {new Date(memory.duration * 1000)
-                                              .toISOString()
-                                              .slice(14, 19)}
+                                        <span className="absolute inset-0 flex items-center justify-center bg-black/10">
+                                          <span className="rounded-full bg-black/55 p-3 text-white shadow-lg transition-colors hover:bg-black/75">
+                                            <PlayCircle size={48} />
                                           </span>
-                                        )}
-                                    </div>
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      <div className="flex h-64 w-[240px] max-w-full items-center justify-center bg-gray-100 text-sm text-gray-500">
+                                        Video unavailable
+                                      </div>
+                                    )}
                                     <div
                                       className={`flex items-center justify-between gap-3 px-3 py-2 text-xs text-gray-500 ${bubbleSurfaceClass}`}
                                     >
@@ -1529,6 +1642,7 @@ export default function MemoryStream({
                                         <audio
                                           controls
                                           src={audioSrc}
+                                          preload="metadata"
                                           className="w-full"
                                         />
                                       ) : (
@@ -1934,14 +2048,43 @@ export default function MemoryStream({
         }}
       />
 
-      {galleryMemoryId !== null && (
-        <ImageGalleryModal
-          memories={photoMemories}
-          initialIndex={Math.max(
+      {viewerMemoryId !== null && (
+        <MediaViewer
+          isOpen={true}
+          albumId={parsedAlbumId ?? 0}
+          media={mediaMemories}
+          initialMediaIndex={Math.max(
             0,
-            photoMemories.findIndex((memory) => memory.id === galleryMemoryId),
+            mediaMemories.findIndex((memory) => memory.id === viewerMemoryId),
           )}
-          onClose={() => setGalleryMemoryId(null)}
+          onClose={() => setViewerMemoryId(null)}
+          onGoToMessage={(memoryId) => {
+            setViewerMemoryId(null);
+            window.setTimeout(() => {
+              document.getElementById(`memory-${memoryId}`)?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+            }, 0);
+          }}
+          onReply={(memory) => {
+            setViewerMemoryId(null);
+            setMessageText(memory.encryptedContent || memory.description || "");
+            composerInputRef.current?.focus();
+          }}
+          onToggleFavorite={(memoryId, currentValue) =>
+            void handleToggleFavorite(memoryId, currentValue)
+          }
+          onTogglePin={(memoryId, currentValue) =>
+            void handleTogglePin(memoryId, currentValue)
+          }
+          onReact={(memoryId, emoji) =>
+            void handleToggleReaction(memoryId, emoji)
+          }
+          onForward={(memoryId) => {
+            setViewerMemoryId(null);
+            setForwardMemoryId(memoryId);
+          }}
         />
       )}
 
