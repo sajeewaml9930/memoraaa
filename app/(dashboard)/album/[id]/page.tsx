@@ -37,26 +37,28 @@ export default function AlbumDetailPage() {
       try {
         const sessionResponse = await fetch("/api/auth/session");
         const sessionData = await sessionResponse.json();
-        const nextUserId = sessionData?.user?.id ? Number(sessionData.user.id) : null;
+        const nextUserId = sessionData?.user?.id
+          ? Number(sessionData.user.id)
+          : null;
         setSessionUserId(Number.isFinite(nextUserId) ? nextUserId : null);
       } catch {
         setSessionUserId(null);
       }
     };
 
+    loadSession();
+  }, [albumId]);
+
+  useEffect(() => {
+    if (!albumId) {
+      return;
+    }
+
     const fetchAlbum = async () => {
       try {
         const response = await fetch(`/api/albums/${albumId}`);
         const data = await response.json();
-        const nextAlbum = data?.data ?? null;
-        setAlbum(nextAlbum);
-
-        if (nextAlbum?.isLocked) {
-          const isOwner = sessionUserId !== null && Number(sessionUserId) === Number(nextAlbum.userId);
-          if (!isOwner && !isUnlocked(albumId, nextAlbum?.passcodeTimeout ?? 5)) {
-            setIsLockedModalOpen(true);
-          }
-        }
+        setAlbum(data?.data ?? null);
       } catch (error) {
         console.error("Error fetching album:", error);
       } finally {
@@ -64,9 +66,20 @@ export default function AlbumDetailPage() {
       }
     };
 
-    loadSession();
     fetchAlbum();
-  }, [albumId, isUnlocked, sessionUserId]);
+  }, [albumId]);
+
+  useEffect(() => {
+    if (!albumId || !album?.isLocked) {
+      return;
+    }
+
+    const isOwner =
+      sessionUserId !== null && Number(sessionUserId) === Number(album.userId);
+    if (!isOwner && !isUnlocked(albumId, album.passcodeTimeout ?? 5)) {
+      setIsLockedModalOpen(true);
+    }
+  }, [album, albumId, isUnlocked, sessionUserId]);
 
   const handleUnlock = async (passcode: string) => {
     if (!albumId || !album) {
@@ -86,12 +99,15 @@ export default function AlbumDetailPage() {
       }
 
       const data = await response.json();
-      unlockAlbum(albumId, Number(data?.timeoutMinutes ?? album.passcodeTimeout ?? 5));
+      unlockAlbum(
+        albumId,
+        Number(data?.timeoutMinutes ?? album.passcodeTimeout ?? 5),
+      );
       setIsLockedModalOpen(false);
     } catch (error) {
       console.error("Error unlocking album:", error);
       window.alert(
-        error instanceof Error ? error.message : "Unable to unlock album"
+        error instanceof Error ? error.message : "Unable to unlock album",
       );
     }
   };
@@ -100,8 +116,14 @@ export default function AlbumDetailPage() {
     return null;
   }
 
-  const isOwner = !!album && sessionUserId !== null && Number(album.userId) === Number(sessionUserId);
-  const isAlbumUnlocked = !album?.isLocked || isOwner || isUnlocked(albumId, album?.passcodeTimeout ?? 5);
+  const isOwner =
+    !!album &&
+    sessionUserId !== null &&
+    Number(album.userId) === Number(sessionUserId);
+  const isAlbumUnlocked =
+    !album?.isLocked ||
+    isOwner ||
+    isUnlocked(albumId, album?.passcodeTimeout ?? 5);
 
   return (
     <>
@@ -132,53 +154,61 @@ export default function AlbumDetailPage() {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-gray-500">
-                    <span className="text-lg font-semibold">{album?.name?.charAt(0)?.toUpperCase() ?? "A"}</span>
+                    <span className="text-lg font-semibold">
+                      {album?.name?.charAt(0)?.toUpperCase() ?? "A"}
+                    </span>
                   </div>
                 )}
               </div>
-              <span className="truncate text-lg font-semibold text-gray-900">{album?.name ?? "Album"}</span>
+              <span className="truncate text-lg font-semibold text-gray-900">
+                {album?.name ?? "Album"}
+              </span>
             </button>
           </div>
         </div>
         {isLoading ? (
-        <div className="flex flex-1 items-center justify-center bg-gray-50">
-          <p className="text-gray-500">Loading album...</p>
-        </div>
-      ) : album?.isLocked && !isAlbumUnlocked ? (
-        <div className="flex flex-1 items-center justify-center bg-gray-50 p-6">
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-3 text-xl font-semibold text-gray-900">This album is locked</h2>
-            <p className="mb-4 text-sm text-gray-600">
-              Enter the passcode to view this album.
-            </p>
-            <input
-              type="password"
-              placeholder="Enter passcode"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onKeyDown={async (event) => {
-                if (event.key === "Enter") {
-                  const value = (event.target as HTMLInputElement).value;
-                  await handleUnlock(value);
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-              onClick={async () => {
-                const input = document.querySelector<HTMLInputElement>("input[placeholder='Enter passcode']");
-                if (input) {
-                  await handleUnlock(input.value);
-                }
-              }}
-            >
-              Unlock
-            </button>
+          <div className="flex flex-1 items-center justify-center bg-gray-50">
+            <p className="text-gray-500">Loading album...</p>
           </div>
-        </div>
-      ) : (
-        <MemoryStream onAlbumHeaderClick={() => setIsInfoDrawerOpen(true)} />
-      )}
+        ) : album?.isLocked && !isAlbumUnlocked ? (
+          <div className="flex flex-1 items-center justify-center bg-gray-50 p-6">
+            <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-3 text-xl font-semibold text-gray-900">
+                This album is locked
+              </h2>
+              <p className="mb-4 text-sm text-gray-600">
+                Enter the passcode to view this album.
+              </p>
+              <input
+                type="password"
+                placeholder="Enter passcode"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={async (event) => {
+                  if (event.key === "Enter") {
+                    const value = (event.target as HTMLInputElement).value;
+                    await handleUnlock(value);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                onClick={async () => {
+                  const input = document.querySelector<HTMLInputElement>(
+                    "input[placeholder='Enter passcode']",
+                  );
+                  if (input) {
+                    await handleUnlock(input.value);
+                  }
+                }}
+              >
+                Unlock
+              </button>
+            </div>
+          </div>
+        ) : (
+          <MemoryStream onAlbumHeaderClick={() => setIsInfoDrawerOpen(true)} />
+        )}
       </div>
 
       <LockAlbumModal

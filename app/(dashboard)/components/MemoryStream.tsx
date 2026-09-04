@@ -38,6 +38,23 @@ import { renderMentionSegments, serializeMention } from "@/app/lib/mentions";
 import { MOOD_META, normalizeMood } from "@/app/lib/moods";
 import type { Memory, MemoryReactionRecord } from "@/app/types";
 
+function mergeMemories(current: Memory[], incoming: Memory[]) {
+  const merged = [...current];
+  incoming.forEach((memory) => {
+    const index = merged.findIndex(
+      (existing) =>
+        existing.id === memory.id ||
+        (Boolean(memory.clientId) && existing.clientId === memory.clientId),
+    );
+    if (index >= 0) {
+      merged[index] = { ...merged[index], ...memory };
+    } else {
+      merged.push(memory);
+    }
+  });
+  return merged;
+}
+
 export default function MemoryStream({
   onAlbumHeaderClick,
 }: { onAlbumHeaderClick?: () => void } = {}) {
@@ -162,7 +179,7 @@ export default function MemoryStream({
 
     const cachedMemories = await cache.getMessages(parsedAlbumId);
     if (cachedMemories.length > 0) {
-      setMemories(sortMemories(cachedMemories));
+      setMemories(sortMemories(mergeMemories([], cachedMemories)));
       setIsLoading(false);
     }
 
@@ -177,7 +194,7 @@ export default function MemoryStream({
       const freshMemories = (
         Array.isArray(data.data) ? data.data : []
       ) as Memory[];
-      setMemories(sortMemories(freshMemories));
+      setMemories(sortMemories(mergeMemories([], freshMemories)));
       await cache.replaceMessages(parsedAlbumId, freshMemories);
       await cache.saveUsers(
         freshMemories.flatMap((memory) =>
@@ -407,15 +424,9 @@ export default function MemoryStream({
         return;
       }
 
-      setMemories((currentMemories) => {
-        if (
-          currentMemories.some((memory) => memory.id === payload.memory!.id)
-        ) {
-          return sortMemories(currentMemories);
-        }
-
-        return sortMemories([payload.memory!, ...currentMemories]);
-      });
+      setMemories((currentMemories) =>
+        sortMemories(mergeMemories(currentMemories, [payload.memory!])),
+      );
       void cache.saveMessage(parsedAlbumId, payload.memory);
       void fetchMemories();
     };
@@ -595,16 +606,21 @@ export default function MemoryStream({
 
   const handleSendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!messageText.trim() || !albumId) {
+    if (!messageText.trim() || !albumId || isSending) {
       return;
     }
 
     stopTyping();
 
     setIsSending(true);
+    const clientId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimisticMemoryId = -Date.now();
     const optimisticMemory: Memory = {
       id: optimisticMemoryId,
+      clientId,
       albumId: parsedAlbumId,
       memoryType: "text",
       encryptedContent: messageText,
@@ -648,6 +664,7 @@ export default function MemoryStream({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          clientId,
           memoryType: "text",
           content: messageText,
           albumId: targetAlbumId,
@@ -658,6 +675,17 @@ export default function MemoryStream({
       if (!response.ok) {
         const text = await response.text().catch(() => null);
         throw new Error(text || `Failed to create memory: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const confirmedMemory = data?.data as Memory | undefined;
+      if (confirmedMemory) {
+        setMemories((currentMemories) =>
+          sortMemories(mergeMemories(currentMemories, [confirmedMemory])),
+        );
+        if (parsedAlbumId) {
+          void cache.saveMessage(parsedAlbumId, confirmedMemory);
+        }
       }
 
       // Success: clear input and refresh list

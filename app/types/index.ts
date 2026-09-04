@@ -58,6 +58,7 @@ export interface MemorySender {
 
 export interface Memory {
   id: number;
+  clientId?: string;
   memoryType: MemoryType;
   encryptedContent?: string;
   encryptedFilePath?: string;

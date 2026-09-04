@@ -13,9 +13,21 @@ const MIME_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="16" fill="#e5e7eb"/><path d="M25 65l14-17 10 11 8-9 14 15H25z" fill="#9ca3af"/><circle cx="62" cy="30" r="7" fill="#9ca3af"/></svg>`;
+
+function placeholderResponse() {
+  return new Response(PLACEHOLDER_SVG, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "private, max-age=300",
+    },
+  });
+}
+
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ albumId: string }> }
+  { params }: { params: Promise<{ albumId: string }> },
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -43,7 +55,7 @@ export async function GET(
     });
 
     if (!album?.coverPhoto) {
-      return NextResponse.json({ error: "Cover photo not found" }, { status: 404 });
+      return placeholderResponse();
     }
 
     const coverPath = path.isAbsolute(album.coverPhoto)
@@ -62,10 +74,13 @@ export async function GET(
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return NextResponse.json({ error: "Cover photo not found" }, { status: 404 });
+      return placeholderResponse();
     }
 
     console.error("Error serving album cover:", error);
-    return NextResponse.json({ error: "Failed to serve album cover" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to serve album cover" },
+      { status: 500 },
+    );
   }
 }

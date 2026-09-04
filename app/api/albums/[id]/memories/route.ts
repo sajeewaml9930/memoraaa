@@ -202,6 +202,7 @@ export async function POST(
 
     const body = (await request.json()) as {
       memoryType?: string;
+      clientId?: string;
       content?: string;
       encryptedContent?: string;
       encryptedFilePath?: string;
@@ -212,6 +213,7 @@ export async function POST(
     };
     const {
       memoryType,
+      clientId,
       content,
       encryptedContent,
       encryptedFilePath,
@@ -266,6 +268,7 @@ export async function POST(
     const responseMemory = {
       ...memory,
       albumId,
+      ...(typeof clientId === "string" ? { clientId } : {}),
       encryptedContent: normalizedContent,
     };
 

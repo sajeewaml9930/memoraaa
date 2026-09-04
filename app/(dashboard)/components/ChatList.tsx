@@ -23,14 +23,27 @@ export default function ChatList() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copyingAlbum, setCopyingAlbum] = useState<Album | null>(null);
   const [contextMenuOpen, setContextMenuOpen] = useState<number | null>(null);
+  const [failedCoverIds, setFailedCoverIds] = useState<Set<number>>(
+    () => new Set(),
+  );
   const pathname = usePathname();
   const router = useRouter();
   const cache = useCache();
 
+  const uniqueAlbums = useCallback((items: Album[]) => {
+    return Array.from(
+      new Map(items.map((album) => [album.id, album])).values(),
+    ).filter(
+      (album) =>
+        !album.isArchived &&
+        !(album as Album & { deletedAt?: unknown }).deletedAt,
+    );
+  }, []);
+
   const fetchAlbums = useCallback(async () => {
     const cachedAlbums = await cache.getAlbums();
     if (cachedAlbums.length > 0) {
-      setAlbums(cachedAlbums);
+      setAlbums(uniqueAlbums(cachedAlbums));
       setIsLoading(false);
     }
     try {
@@ -40,15 +53,17 @@ export default function ChatList() {
 
       const response = await fetch(`/api/albums?${params.toString()}`);
       const data = await response.json();
-      const freshAlbums = Array.isArray(data.data) ? data.data : [];
+      const freshAlbums = uniqueAlbums(
+        Array.isArray(data.data) ? data.data : [],
+      );
       setAlbums(freshAlbums);
-      await cache.saveAlbums(freshAlbums);
+      await cache.reconcileAlbums(freshAlbums);
     } catch (error) {
       console.error("Error fetching albums:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [cache]);
+  }, [cache, uniqueAlbums]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void fetchAlbums(), 0);
@@ -61,7 +76,8 @@ export default function ChatList() {
     };
 
     window.addEventListener("memoraa:albums-changed", handleAlbumsChanged);
-    return () => window.removeEventListener("memoraa:albums-changed", handleAlbumsChanged);
+    return () =>
+      window.removeEventListener("memoraa:albums-changed", handleAlbumsChanged);
   }, [fetchAlbums]);
 
   const handleCreateAlbum = async (e: React.FormEvent) => {
@@ -106,7 +122,7 @@ export default function ChatList() {
     }
 
     const confirmed = window.confirm(
-      `Archive "${album.name}"? It will be moved to the archive list and hidden from the main chat list.`
+      `Archive "${album.name}"? It will be moved to the archive list and hidden from the main chat list.`,
     );
 
     if (!confirmed) {
@@ -127,7 +143,10 @@ export default function ChatList() {
         throw new Error(data?.error || "Failed to archive album");
       }
 
-      setAlbums((prevAlbums) => prevAlbums.filter((item) => item.id !== album.id));
+      setAlbums((prevAlbums) =>
+        prevAlbums.filter((item) => item.id !== album.id),
+      );
+      await cache.removeAlbum(album.id);
       setContextMenuOpen(null);
 
       if (pathname === `/album/${album.id}`) {
@@ -136,7 +155,7 @@ export default function ChatList() {
     } catch (error) {
       console.error("Error archiving album:", error);
       window.alert(
-        error instanceof Error ? error.message : "Unable to archive album"
+        error instanceof Error ? error.message : "Unable to archive album",
       );
     }
   };
@@ -148,7 +167,7 @@ export default function ChatList() {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${album.name}"? This will hide the album and mark its unshared memories as archived.`
+      `Are you sure you want to delete "${album.name}"? This will hide the album and mark its unshared memories as archived.`,
     );
 
     if (!confirmed) {
@@ -167,7 +186,10 @@ export default function ChatList() {
         throw new Error(data?.error || "Failed to delete album");
       }
 
-      setAlbums((prevAlbums) => prevAlbums.filter((item) => item.id !== album.id));
+      setAlbums((prevAlbums) =>
+        prevAlbums.filter((item) => item.id !== album.id),
+      );
+      await cache.removeAlbum(album.id);
       setContextMenuOpen(null);
 
       if (pathname === `/album/${album.id}`) {
@@ -176,7 +198,7 @@ export default function ChatList() {
     } catch (error) {
       console.error("Error deleting album:", error);
       window.alert(
-        error instanceof Error ? error.message : "Unable to delete album"
+        error instanceof Error ? error.message : "Unable to delete album",
       );
     }
   };
@@ -205,7 +227,7 @@ export default function ChatList() {
     } catch (error) {
       console.error("Error toggling pin:", error);
       window.alert(
-        error instanceof Error ? error.message : "Unable to update pin status"
+        error instanceof Error ? error.message : "Unable to update pin status",
       );
     }
   };
@@ -252,36 +274,46 @@ export default function ChatList() {
 
       setAlbums((prevAlbums) =>
         prevAlbums.map((item) =>
-          item.id === album.id ? { ...item, isMuted: data?.data?.isMuted ?? !album.isMuted } : item
-        )
+          item.id === album.id
+            ? { ...item, isMuted: data?.data?.isMuted ?? !album.isMuted }
+            : item,
+        ),
       );
+      await cache.saveAlbum({
+        ...album,
+        isMuted: data?.data?.isMuted ?? !album.isMuted,
+      });
       setContextMenuOpen(null);
     } catch (error) {
       console.error("Error toggling mute:", error);
       window.alert(
-        error instanceof Error ? error.message : "Unable to update mute status"
+        error instanceof Error ? error.message : "Unable to update mute status",
       );
     }
   };
 
   const handleLockUpdate = (updatedAlbum: Album) => {
+    void cache.saveAlbum(updatedAlbum);
     setAlbums((prevAlbums) =>
       prevAlbums.map((album) =>
-        album.id === updatedAlbum.id ? { ...album, ...updatedAlbum } : album
-      )
+        album.id === updatedAlbum.id ? { ...album, ...updatedAlbum } : album,
+      ),
     );
   };
 
   const handleAlbumUpdate = (updatedAlbum: Album) => {
+    void cache.saveAlbum(updatedAlbum);
     setAlbums((prevAlbums) =>
       prevAlbums.map((album) =>
-        album.id === updatedAlbum.id ? updatedAlbum : album
-      )
+        album.id === updatedAlbum.id ? updatedAlbum : album,
+      ),
     );
   };
 
   return (
-    <div className={`flex w-full shrink-0 flex-col border-r border-gray-200 bg-white md:w-80 ${pathname.startsWith("/album/") ? "hidden md:flex" : ""}`}>
+    <div
+      className={`flex w-full shrink-0 flex-col border-r border-gray-200 bg-white md:w-80 ${pathname.startsWith("/album/") ? "hidden md:flex" : ""}`}
+    >
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <div className="mb-4 flex items-center justify-between">
@@ -360,11 +392,18 @@ export default function ChatList() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-blue-100 to-indigo-200">
-                        {album.coverPhoto ? (
+                        {album.coverPhoto && !failedCoverIds.has(album.id) ? (
                           <img
                             src={`/api/album/cover/${album.id}`}
                             alt={album.name}
                             className="h-full w-full object-cover"
+                            onError={() =>
+                              setFailedCoverIds((currentIds) => {
+                                const nextIds = new Set(currentIds);
+                                nextIds.add(album.id);
+                                return nextIds;
+                              })
+                            }
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-gray-500">
@@ -379,7 +418,10 @@ export default function ChatList() {
                             {album.name}
                           </h3>
                           {album.isPinned && (
-                            <Pin size={14} className="shrink-0 text-amber-500" />
+                            <Pin
+                              size={14}
+                              className="shrink-0 text-amber-500"
+                            />
                           )}
                           {album.isLocked && (
                             <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
@@ -399,7 +441,9 @@ export default function ChatList() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setContextMenuOpen(contextMenuOpen === album.id ? null : album.id);
+                        setContextMenuOpen(
+                          contextMenuOpen === album.id ? null : album.id,
+                        );
                       }}
                       className="ml-2 p-1 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition"
                       title="Album options"
@@ -450,7 +494,9 @@ export default function ChatList() {
                       onClick={(e) => handleToggleMute(album, e)}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      {album.isMuted ? "Unmute notifications" : "Mute notifications"}
+                      {album.isMuted
+                        ? "Unmute notifications"
+                        : "Mute notifications"}
                     </button>
                     <button
                       type="button"

@@ -6,49 +6,49 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id                         Int       @id @default(autoincrement())
-  username                   String    @unique @db.VarChar(80)
-  email                      String    @unique @db.VarChar(120)
-  emailVerified              Boolean   @default(false) @map("email_verified")
-  twoFactorEnabled           Boolean   @default(false) @map("two_factor_enabled")
-  isActive                   Boolean   @default(true) @map("is_active")
-  wallpaperType              String    @default("default") @map("wallpaper_type") @db.VarChar(20)
-  wallpaperValue             String?   @map("wallpaper_value") @db.VarChar(120)
-  wallpaperImagePath         String?   @map("wallpaper_image_path") @db.VarChar(500)
-  passwordHash               String    @map("password_hash") @db.VarChar(128)
-  encryptionKey              String    @map("encryption_key") @db.VarChar(128)
-  fullName                   String?   @map("full_name") @db.VarChar(100)
-  bio                        String?   @db.VarChar(200)
-  avatar                     String?   @db.VarChar(200)
-  passcodeHash               String?   @map("passcode_hash") @db.VarChar(128)
-  passcodeTimeout            Int       @default(5) @map("passcode_timeout")
-  biometricEnabled           Boolean   @default(false) @map("biometric_enabled")
-  localOnly                  Boolean   @default(false) @map("local_only")
-  emailNotificationsEnabled  Boolean   @default(true) @map("email_notifications_enabled")
-  inAppNotificationsEnabled  Boolean   @default(true) @map("in_app_notifications_enabled")
-  dailyReminderTime          DateTime? @map("daily_reminder_time") @db.Time(0)
-  dailyReminderEnabled       Boolean   @default(true) @map("daily_reminder_enabled")
-  lastReminderSent           DateTime? @map("last_reminder_sent")
-  timezone                   String?   @map("timezone") @db.VarChar(50)
-  createdAt                  DateTime  @default(now()) @map("created_at")
-  lastActive                 DateTime  @default(now()) @map("last_active")
-  
-  albums        Album[]
-  memories      Memory[]
-  tags          Tag[]
-  sharedAlbums    SharedAlbum[]
-  albumMutes      AlbumMute[]
-  backupJobs      BackupJob[]
-  searchHistory   SearchHistory[]
-  sharedMemoryLinks SharedMemoryLink[]
-  memoryMentions  MemoryMention[]
-  notifications   Notification[]
-  memoryReactions MemoryReaction[]
+  id                        Int       @id @default(autoincrement())
+  username                  String    @unique @db.VarChar(80)
+  email                     String    @unique @db.VarChar(120)
+  emailVerified             Boolean   @default(false) @map("email_verified")
+  twoFactorEnabled          Boolean   @default(false) @map("two_factor_enabled")
+  isActive                  Boolean   @default(true) @map("is_active")
+  wallpaperType             String    @default("default") @map("wallpaper_type") @db.VarChar(20)
+  wallpaperValue            String?   @map("wallpaper_value") @db.VarChar(120)
+  wallpaperImagePath        String?   @map("wallpaper_image_path") @db.VarChar(500)
+  passwordHash              String    @map("password_hash") @db.VarChar(128)
+  encryptionKey             String    @map("encryption_key") @db.VarChar(128)
+  fullName                  String?   @map("full_name") @db.VarChar(100)
+  bio                       String?   @db.VarChar(200)
+  avatar                    String?   @db.VarChar(200)
+  passcodeHash              String?   @map("passcode_hash") @db.VarChar(128)
+  passcodeTimeout           Int       @default(5) @map("passcode_timeout")
+  biometricEnabled          Boolean   @default(false) @map("biometric_enabled")
+  localOnly                 Boolean   @default(false) @map("local_only")
+  emailNotificationsEnabled Boolean   @default(true) @map("email_notifications_enabled")
+  inAppNotificationsEnabled Boolean   @default(true) @map("in_app_notifications_enabled")
+  dailyReminderTime         DateTime? @map("daily_reminder_time") @db.Time(0)
+  dailyReminderEnabled      Boolean   @default(true) @map("daily_reminder_enabled")
+  lastReminderSent          DateTime? @map("last_reminder_sent")
+  timezone                  String?   @map("timezone") @db.VarChar(50)
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  lastActive                DateTime  @default(now()) @map("last_active")
+
+  albums             Album[]
+  memories           Memory[]
+  tags               Tag[]
+  sharedAlbums       SharedAlbum[]
+  albumMutes         AlbumMute[]
+  backupJobs         BackupJob[]
+  searchHistory      SearchHistory[]
+  sharedMemoryLinks  SharedMemoryLink[]
+  memoryMentions     MemoryMention[]
+  notifications      Notification[]
+  memoryReactions    MemoryReaction[]
   verificationTokens VerificationToken[]
 }
 
@@ -102,8 +102,8 @@ model Album {
   userId          Int       @map("user_id")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
-  
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   memories     AlbumMemory[]
   sharedAlbums SharedAlbum[]
   albumMutes   AlbumMute[]
@@ -112,84 +112,84 @@ model Album {
 }
 
 model Memory {
-  id                 Int       @id @default(autoincrement())
-  memoryType         String    @map("memory_type") @db.VarChar(20)
-  encryptedContent   String?   @map("encrypted_content") @db.Text
-  encryptedFilePath  String?   @map("encrypted_file_path") @db.VarChar(500)
-  thumbnailPath      String?   @map("thumbnail_path") @db.VarChar(500)
-  duration           Int?      @map("duration")
-  title              String?   @db.VarChar(100)
-  description        String?   @db.VarChar(200)
-  mood               String?   @db.VarChar(20)
-  isFavorite         Boolean   @default(false) @map("is_favorite")
-  isPinned           Boolean   @default(false) @map("is_pinned")
-  pinnedAt           DateTime? @map("pinned_at")
-  isArchived         Boolean   @default(false) @map("is_archived")
-  viewCount          Int       @default(0) @map("view_count")
-  memoryDate         DateTime  @map("memory_date") @db.Date
-  userId             Int       @map("user_id")
-  forwardedFromId    Int?      @map("forwarded_from_id")
-  status             String    @default("processing") @db.VarChar(20)
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  
-  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  forwardedFrom      Memory?    @relation("Forward", fields: [forwardedFromId], references: [id])
-  forwardedTo        Memory[]   @relation("Forward")
-  albums             AlbumMemory[]
-  tags               MemoryTag[]
-  sharedMemoryLinks  SharedMemoryLink[]
-  mentions           MemoryMention[]
-  notifications      Notification[]
-  reactions          MemoryReaction[]
+  id                Int       @id @default(autoincrement())
+  memoryType        String    @map("memory_type") @db.VarChar(20)
+  encryptedContent  String?   @map("encrypted_content") @db.Text
+  encryptedFilePath String?   @map("encrypted_file_path") @db.VarChar(500)
+  thumbnailPath     String?   @map("thumbnail_path") @db.VarChar(500)
+  duration          Int?      @map("duration")
+  title             String?   @db.VarChar(100)
+  description       String?   @db.VarChar(200)
+  mood              String?   @db.VarChar(20)
+  isFavorite        Boolean   @default(false) @map("is_favorite")
+  isPinned          Boolean   @default(false) @map("is_pinned")
+  pinnedAt          DateTime? @map("pinned_at")
+  isArchived        Boolean   @default(false) @map("is_archived")
+  viewCount         Int       @default(0) @map("view_count")
+  memoryDate        DateTime  @map("memory_date") @db.Date
+  userId            Int       @map("user_id")
+  forwardedFromId   Int?      @map("forwarded_from_id")
+  status            String    @default("processing") @db.VarChar(20)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forwardedFrom     Memory?            @relation("Forward", fields: [forwardedFromId], references: [id])
+  forwardedTo       Memory[]           @relation("Forward")
+  albums            AlbumMemory[]
+  tags              MemoryTag[]
+  sharedMemoryLinks SharedMemoryLink[]
+  mentions          MemoryMention[]
+  notifications     Notification[]
+  reactions         MemoryReaction[]
 
   @@map("memories")
 }
 
 model Tag {
-  id        Int       @id @default(autoincrement())
-  name      String    @db.VarChar(50)
-  isAuto    Boolean   @default(false) @map("is_auto")
-  userId    Int       @map("user_id")
-  createdAt DateTime  @default(now()) @map("created_at")
-  
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memories  MemoryTag[]
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(50)
+  isAuto    Boolean  @default(false) @map("is_auto")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memories MemoryTag[]
 
   @@map("tags")
 }
 
 model AlbumMemory {
-  albumId   Int @map("album_id")
-  memoryId  Int @map("memory_id")
-  
+  albumId  Int    @map("album_id")
+  memoryId Int    @map("memory_id")
+  album    Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  memory   Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
   @@id([albumId, memoryId])
   @@map("album_memories")
-  album  Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
 }
 
 model MemoryTag {
-  memoryId  Int @map("memory_id")
-  tagId     Int @map("tag_id")
-  
+  memoryId Int    @map("memory_id")
+  tagId    Int    @map("tag_id")
+  memory   Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
   @@id([memoryId, tagId])
   @@map("memory_tags")
-  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
-  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 }
 
 model SharedAlbum {
-  id               Int       @id @default(autoincrement())
-  albumId          Int       @map("album_id")
-  userId           Int       @map("user_id")
-  permission       String    @default("view") @db.VarChar(20)
-  accepted         Boolean   @default(false)
-  invitedAt        DateTime  @default(now()) @map("invited_at")
-  muted            Boolean   @default(false)
-  token            String?   @unique @map("token") @db.VarChar(255)
-  inviteExpiresAt  DateTime? @map("invite_expires_at")
-  
+  id              Int       @id @default(autoincrement())
+  albumId         Int       @map("album_id")
+  userId          Int       @map("user_id")
+  permission      String    @default("view") @db.VarChar(20)
+  accepted        Boolean   @default(false)
+  invitedAt       DateTime  @default(now()) @map("invited_at")
+  muted           Boolean   @default(false)
+  token           String?   @unique @map("token") @db.VarChar(255)
+  inviteExpiresAt DateTime? @map("invite_expires_at")
+
   album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -220,7 +220,7 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   memory Memory? @relation(fields: [memoryId], references: [id], onDelete: SetNull)
 
   @@map("notifications")
@@ -280,7 +280,7 @@ model BackupJob {
   filePath      String?   @map("file_path") @db.VarChar(500)
   cloudProvider String?   @map("cloud_provider") @db.VarChar(20)
   errorMessage  String?   @map("error_message") @db.Text
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("backup_jobs")

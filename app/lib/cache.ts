@@ -100,6 +100,30 @@ function newestMessages<T extends Memory>(memories: T[]): T[] {
     .slice(0, MAX_MESSAGES_PER_ALBUM);
 }
 
+function uniqueByIdentity<T extends { id: number; clientId?: string }>(
+  items: T[],
+): T[] {
+  return items.reduce<T[]>((unique, item) => {
+    const index = unique.findIndex(
+      (existing) =>
+        existing.id === item.id ||
+        (Boolean(item.clientId) && existing.clientId === item.clientId),
+    );
+    if (index >= 0) {
+      unique[index] = item;
+    } else {
+      unique.push(item);
+    }
+    return unique;
+  }, []);
+}
+
+function isActiveAlbum(album: Album) {
+  return (
+    !album.isArchived && !(album as Album & { deletedAt?: unknown }).deletedAt
+  );
+}
+
 export async function initializeCache() {
   if (!isBrowser()) return;
   try {
@@ -129,14 +153,15 @@ export async function getMessages(albumId: number): Promise<Memory[]> {
         });
       },
     );
-    return newestMessages(
-      records.map((record) => {
-        const { cacheKey, cachedAt, ...memory } = record;
-        void cacheKey;
-        void cachedAt;
-        return memory as Memory;
-      }),
-    ).sort((a, b) => messageTimestamp(a) - messageTimestamp(b) || a.id - b.id);
+    const memories = records.map((record) => {
+      const { cacheKey, cachedAt, ...memory } = record;
+      void cacheKey;
+      void cachedAt;
+      return memory as Memory;
+    });
+    return newestMessages(uniqueByIdentity(memories)).sort(
+      (a, b) => messageTimestamp(a) - messageTimestamp(b) || a.id - b.id,
+    );
   } catch {
     return [];
   }
@@ -148,7 +173,7 @@ export async function saveMessages(albumId: number, memories: Memory[]) {
     await runTransaction(["messages"], "readwrite", (transaction) => {
       const store = transaction.objectStore("messages");
       const now = Date.now();
-      newestMessages(memories).forEach((memory) => {
+      newestMessages(uniqueByIdentity(memories)).forEach((memory) => {
         store.put({
           ...memory,
           albumId,
@@ -172,7 +197,7 @@ export async function replaceMessages(albumId: number, memories: Memory[]) {
       request.onsuccess = () => {
         request.result.forEach((key) => store.delete(key));
         const now = Date.now();
-        newestMessages(memories).forEach((memory) => {
+        newestMessages(uniqueByIdentity(memories)).forEach((memory) => {
           store.put({
             ...memory,
             albumId,
@@ -189,7 +214,32 @@ export async function replaceMessages(albumId: number, memories: Memory[]) {
 }
 
 export async function saveMessage(albumId: number, memory: Memory) {
-  return saveMessages(albumId, [memory]);
+  if (!isBrowser()) return;
+  try {
+    await runTransaction(["messages"], "readwrite", (transaction) => {
+      const store = transaction.objectStore("messages");
+      const request = store.index("albumId").getAll(albumId);
+      request.onsuccess = () => {
+        if (memory.clientId) {
+          (request.result as CachedMemory[])
+            .filter(
+              (record) =>
+                record.clientId === memory.clientId && record.id !== memory.id,
+            )
+            .forEach((record) => store.delete(record.cacheKey));
+        }
+        store.put({
+          ...memory,
+          albumId,
+          cacheKey: messageKey(albumId, memory.id),
+          cachedAt: Date.now(),
+        } satisfies CachedMemory);
+      };
+    });
+    await pruneMessages(albumId);
+  } catch {
+    // Cache failures must never block the application.
+  }
 }
 
 export async function removeMessage(albumId: number, memoryId: number) {
@@ -228,6 +278,10 @@ async function pruneMessages(albumId: number) {
 }
 
 export async function saveAlbum(album: Album) {
+  if (!isActiveAlbum(album)) {
+    await removeAlbum(album.id);
+    return;
+  }
   if (!isBrowser()) return;
   try {
     await runTransaction(["albums"], "readwrite", (transaction) => {
@@ -238,16 +292,54 @@ export async function saveAlbum(album: Album) {
   }
 }
 
+export async function removeAlbum(albumId: number) {
+  if (!isBrowser()) return;
+  try {
+    await runTransaction(
+      ["albums", "messages", "collaborators"],
+      "readwrite",
+      (transaction) => {
+        transaction.objectStore("albums").delete(albumId);
+        transaction.objectStore("collaborators").delete(albumId);
+        const messages = transaction.objectStore("messages");
+        const request = messages.index("albumId").getAllKeys(albumId);
+        request.onsuccess = () =>
+          request.result.forEach((key) => messages.delete(key));
+      },
+    );
+  } catch {
+    // Cache failures must never block the application.
+  }
+}
+
+export async function clearAlbums() {
+  if (!isBrowser()) return;
+  try {
+    await runTransaction(["albums"], "readwrite", (transaction) => {
+      transaction.objectStore("albums").clear();
+    });
+  } catch {
+    // Cache failures must never block the application.
+  }
+}
+
 export async function getAlbums(): Promise<Album[]> {
   if (!isBrowser()) return [];
   try {
-    return await runTransaction(["albums"], "readonly", (transaction) => {
-      const request = transaction.objectStore("albums").getAll();
-      return new Promise<Album[]>((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-    });
+    const albums = await runTransaction(
+      ["albums"],
+      "readonly",
+      (transaction) => {
+        const request = transaction.objectStore("albums").getAll();
+        return new Promise<Album[]>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      },
+    );
+    return Array.from(
+      new Map(albums.map((album) => [album.id, album])).values(),
+    ).filter(isActiveAlbum);
   } catch {
     return [];
   }
@@ -255,6 +347,40 @@ export async function getAlbums(): Promise<Album[]> {
 
 export async function saveAlbums(albums: Album[]) {
   await Promise.all(albums.map((album) => saveAlbum(album)));
+}
+
+export async function reconcileAlbums(serverAlbums: Album[]) {
+  if (!isBrowser()) return;
+  const freshAlbums = serverAlbums.filter(isActiveAlbum);
+  const serverIds = new Set(freshAlbums.map((album) => album.id));
+
+  try {
+    await runTransaction(["albums"], "readwrite", (transaction) => {
+      const store = transaction.objectStore("albums");
+      const request = store.getAll();
+      request.onsuccess = () => {
+        (request.result as Album[]).forEach((cachedAlbum) => {
+          if (!serverIds.has(cachedAlbum.id)) {
+            store.delete(cachedAlbum.id);
+          }
+        });
+        freshAlbums.forEach((album) => {
+          const cachedAlbum = (request.result as Album[]).find(
+            (candidate) => candidate.id === album.id,
+          );
+          if (
+            !cachedAlbum ||
+            new Date(album.updatedAt).getTime() >=
+              new Date(cachedAlbum.updatedAt).getTime()
+          ) {
+            store.put(album);
+          }
+        });
+      };
+    });
+  } catch {
+    // Cache failures must never block the application.
+  }
 }
 
 export async function getAlbum(albumId: number): Promise<Album | null> {
