@@ -33,6 +33,8 @@
 
 **Memoraa** is a private, encrypted digital scrapbook that works like WhatsApp. Send text notes, photos, videos, and voice messages – but organized as memories inside thematic albums. All content is **end-to-end encrypted**, stored securely, and accessible across devices.
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production hosting, database migrations, persistent uploads, Socket.IO, and HTTPS setup.
+
 ### Why Memoraa?
 
 - 🔒 **Privacy-first** – End-to-end encryption ensures only you (and your collaborators) can read your memories.
